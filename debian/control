@@ -1,0 +1,24 @@
+Source: lancelog
+Section: univention
+Priority: optional
+Maintainer: Univention GmbH <packages@univention.de>
+Build-Depends:
+ debhelper,
+ dh-python,
+ python3-all,
+ python3-dev,
+Standards-Version: 3.5.2
+
+Package: python3-lancelog
+Architecture: all
+Depends:
+ python3-loguru,
+ python3-orjson,
+ ${misc:Depends},
+ ${python3:Depends},
+Description: Python 3 library to help developers set up logging in their applications in an easy and consistent way.
+ .
+ It is part of Univention Corporate Server (UCS), an
+ integrated, directory driven solution for managing
+ corporate environments. For more information about UCS,
+ refer to: https://www.univention.de/

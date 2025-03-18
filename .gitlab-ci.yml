@@ -1,0 +1,91 @@
+include:
+  - project: univention/dist/docker-services
+    file:
+      - pre-commit.yml
+
+variables:
+  UV_VERSION: 0.6.6
+  PYTHON_VERSION: 3.11
+  BASE_LAYER: bookworm-slim
+  # GitLab CI creates a separate mountpoint for the build directory,
+  # so we need to copy instead of using hard links.
+  UV_LINK_MODE: copy
+
+stages:
+#  - prepare
+  - lint
+  - build
+  - publish
+
+#prepare:
+#  stage: prepare
+#  script:
+#    - sed -rne '1s/^lancelog \(([^)]+)\) ([^;]+);.*/DEBVER=\1\nDEBDIST=\2/p;T;q' debian/changelog >.env
+#  artifacts:
+#    reports:
+#      dotenv: .env
+
+run_pre_commit:
+  stage: lint
+  extends: .pre-commit
+
+#build_deb_package:
+#  stage: build
+#  dependencies:
+#    - prepare
+#  rules:
+#    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+#      when: "always"
+#    - changes:
+#      - pyproject.toml
+#      - debian/**/*
+#      - src/**/*
+#  parallel:
+#    matrix:
+#      - distribution:
+#        - debian:trixie-slim
+#        - ubuntu:24.10
+#  image: $distribution
+#  variables:
+#    DEBIAN_FRONTEND: noninteractive
+#    LC_ALL: C.UTF-8
+#  before_script:
+#    - apt-get -qq update
+#    - apt-get -q --assume-yes build-dep .
+#  script:
+#    - dpkg-buildpackage --no-sign -b
+#    - apt-get -q --assume-yes install ../python3-lancelog*.deb
+#    - rm -rf "$CI_PROJECT_DIR/public"
+#    - mkdir -p "$CI_PROJECT_DIR/public/${distribution%-slim}"
+#    - mv -v -t "$CI_PROJECT_DIR/public/${distribution%-slim}/" ../*.deb
+#    - cd "$CI_PROJECT_DIR/public/${distribution%-slim}"
+#    - dpkg-scanpackages . >Packages
+#  artifacts:
+#    paths:
+#      - public
+#    expire_in: 1 day
+
+build_pip_package:
+  stage: build
+  artifacts:
+    paths:
+      - dist/lancelog*
+    expire_in: 1 week
+  image: ghcr.io/astral-sh/uv:$UV_VERSION-python$PYTHON_VERSION-$BASE_LAYER
+  script:
+    - |
+      if [ "$CI_COMMIT_BRANCH" != "$CI_DEFAULT_BRANCH" ]; then
+        ORI_VERSION="$(uvx --from=toml-cli toml get --toml-path=pyproject.toml project.version)"
+        uvx --from=toml-cli toml set --toml-path=pyproject.toml project.version "${ORI_VERSION}.dev0+${CI_COMMIT_REF_SLUG//-/.}.$CI_COMMIT_SHORT_SHA"
+      else
+        true
+      fi
+    - uv build
+
+publish_gitlab_pip:
+  stage: publish
+  dependencies:
+    - build_pip_package
+  image: ghcr.io/astral-sh/uv:$UV_VERSION-python$PYTHON_VERSION-$BASE_LAYER
+  script:
+    - uv publish --publish-url ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi --username gitlab-ci-token --password ${CI_JOB_TOKEN}

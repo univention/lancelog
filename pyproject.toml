@@ -1,0 +1,68 @@
+[project]
+name = "lancelog"
+version = "0.1.0"
+description = "Setup logging like a hero."
+readme = "README.md"
+authors = [{ name = "Daniel Troeder", email = "troeder@univention.de" }]
+license = {text = "AGPL-3.0-only"}
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Topic :: System :: Logging",
+    "Typing :: Typed",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "logfmter>=0.0.9",
+    "loguru>=0.7.0",
+]
+
+[project.optional-dependencies]
+json = [
+    "orjson>=3.10.15",
+]
+
+[project.urls]
+Homepage = "https://git.knut.univention.de/univention/dev/libraries/lancelog"
+Documentation = "https://git.knut.univention.de/univention/dev/libraries/lancelog/README.md"
+Repository = "https://git.knut.univention.de/univention/dev/libraries/lancelog.git"
+Issues = "https://git.knut.univention.de/univention/dev/libraries/lancelog/-/issues"
+Changelog = "https://git.knut.univention.de/univention/dev/libraries/lancelog/CHANGELOG.md"
+
+[tool.uv]
+package = true
+
+### linters ###
+
+[tool.mypy]
+ignore_missing_imports = true
+pretty = true
+strict = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle
+    "F",  # Pyflakes
+    "UP",  # pyupgrade
+    "B",  # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "I",  # isort
+]
+
+[tool.ruff.lint.isort]
+case-sensitive = true
+combine-as-imports = true
+lines-after-imports = 2
