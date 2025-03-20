@@ -31,13 +31,22 @@ This will pull in the [orjson](https://github.com/ijl/orjson) library.
 
 ### Usage in pyproject.toml
 
-To reference _lancelog_ in your projects `pyproject.toml`, add to it:
+To reference _lancelog_ in your projects `pyproject.toml`:
+
+When using Poetry:
 
 ```toml
 [[tool.poetry.source]]
 name = "lancelog"
 url = "https://git.knut.univention.de/api/v4/projects/1449/packages/pypi/simple"
 priority = "supplemental"
+```
+
+When using uv:
+
+```toml
+[[tool.uv.index]]
+url = "https://git.knut.univention.de/api/v4/projects/1449/packages/pypi/simple"
 ```
 
 ## Usage
