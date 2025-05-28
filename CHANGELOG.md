@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.2] - 2025-05-28
+
+- fix(Debian build): fix package metadata using pybuild with plugin pybuild-plugin-pyproject
+- fix(Debian dependencies): logfmter is required, orjson is optional
+
 ## [0.2.0] - 2025-03-20
 
 - feat: add `py.typed` marker file, so library user's mypy uses it
