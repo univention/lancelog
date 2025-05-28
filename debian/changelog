@@ -1,3 +1,9 @@
+lancelog (0.2.1) unstable; urgency=low
+
+  * fix(Debian dependencies): logfmter is required, orjson is optional
+
+ -- Daniel Troeder <troeder@univention.de>  Wed, 28 May 2025 16:30:36 +0200
+
 lancelog (0.2.0) unstable; urgency=low
 
   * feat: add py.typed marker file, so library user's mypy uses it
