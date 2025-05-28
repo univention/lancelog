@@ -41,6 +41,9 @@ Changelog = "https://git.knut.univention.de/univention/dev/libraries/lancelog/CH
 [tool.uv]
 package = true
 
+[tool.setuptools]
+py-modules = []
+
 ### linters ###
 
 [tool.mypy]

@@ -3,5 +3,8 @@
 # SPDX-FileCopyrightText: 2025 Univention GmbH
 # SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Univention-Proprietary
 
+export PYBUILD_NAME=lancelog
+export PYBUILD_SYSTEM=pyproject
+
 %:
-	dh $@ --with python3
+	dh $@ --with python3 --buildsystem=pybuild
