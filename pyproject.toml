@@ -1,6 +1,6 @@
 [project]
 name = "lancelog"
-version = "0.2.2"
+version = "0.2.3"
 description = "Setup logging like a hero."
 readme = "README.md"
 authors = [{ name = "Daniel Troeder", email = "troeder@univention.de" }]
@@ -30,6 +30,10 @@ dependencies = [
 json = [
     "orjson>=3.10.15",
 ]
+test = [
+    "pytest>=7",
+    "pytest-cov>=4",
+]
 
 [project.urls]
 Homepage = "https://git.knut.univention.de/univention/dev/libraries/lancelog"
@@ -41,8 +45,12 @@ Changelog = "https://git.knut.univention.de/univention/dev/libraries/lancelog/CH
 [tool.uv]
 package = true
 
-[tool.setuptools]
-py-modules = []
+[tool.coverage.run]
+source = ["src", "tests"]
+
+[tool.pytest.ini_options]
+# Caution: UCS 5.2 uses old coverage 6.5 / pytest-cov 4.0. It calculates coverage percentage differently to newer versions.
+addopts = "-lvv --cov --cov-report term-missing --cov-fail-under 20"
 
 ### linters ###
 

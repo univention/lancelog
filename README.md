@@ -293,4 +293,8 @@ See their respective web pages for installation and usage instructions.
 
 ### Tests
 
-**TODO**: Write tests!
+```shell
+uv run pytest
+```
+
+TODO: Write more test until 100% coverage.

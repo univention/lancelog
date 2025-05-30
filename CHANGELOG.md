@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.3] - 2025-05-30
+
+- fix: switch project to src-layout, add tests
+
 ## [0.2.2] - 2025-05-28
 
 - fix(Debian build): fix package metadata using pybuild with plugin pybuild-plugin-pyproject

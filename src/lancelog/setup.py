@@ -89,7 +89,6 @@ def setup_logging(
             "The 'orjson' library is required to serialize logs to JSON. Please run 'pip install lancelog[json]'."
         )
 
-    logger.remove()
     sink_is_tty = hasattr(sink, "write") and sink.isatty()
     kwargs = {
         "sink": sink,
@@ -99,6 +98,7 @@ def setup_logging(
         "filter": filter,
         "serialize": data_format == DataFormat.JSON,
     }
+    logger.remove()
     logger.add(**kwargs)
     logger.configure(
         patcher=functools.partial(
