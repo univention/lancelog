@@ -1,6 +1,10 @@
 # ♞ Lancelog ♞ - Setup logging like a hero 🌟
 
-A library that helps developers to set up logging in their applications in an easy and consistent way.
+_A library that helps developers to set up logging in their applications in an easy and consistent way._
+
+[![Coverage](https://sonarqube.knut.univention.de/api/project_badges/measure?project=univention_dev_libraries_lancelog_2561d8ad-ee33-47fc-894f-3c90873c87a2&metric=coverage&token=sqb_c0ff2291588ac852e1463885c00ec2df0dba6200)](https://sonarqube.knut.univention.de/dashboard?id=univention_dev_libraries_lancelog_2561d8ad-ee33-47fc-894f-3c90873c87a2)
+[![Quality Gate Status](https://sonarqube.knut.univention.de/api/project_badges/measure?project=univention_dev_libraries_lancelog_2561d8ad-ee33-47fc-894f-3c90873c87a2&metric=alert_status&token=sqb_c0ff2291588ac852e1463885c00ec2df0dba6200)](https://sonarqube.knut.univention.de/dashboard?id=univention_dev_libraries_lancelog_2561d8ad-ee33-47fc-894f-3c90873c87a2)
+[![Python version](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/)
 
 The [Loguru](https://loguru.readthedocs.io) and the Python logging libraries are set up
 according to our ADRs (see section [#Background](#Background)).
