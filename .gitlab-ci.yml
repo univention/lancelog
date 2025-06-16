@@ -59,7 +59,7 @@ sonarqube-scan:
   needs:
     - test
   image:
-      name: sonarsource/sonar-scanner-cli:11
+      name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/sonarsource/sonar-scanner-cli:11
       entrypoint: [""]
   cache:
     policy: pull-push
@@ -72,7 +72,7 @@ sonarqube-scan:
   allow_failure: true
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
-    - if: $CI_COMMIT_BRANCH == 'main'
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_REF_PROTECTED == "true"
 
 #build_deb_package:
 #  stage: build
