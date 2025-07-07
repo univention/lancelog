@@ -49,8 +49,18 @@ package = true
 source = ["src", "tests"]
 
 [tool.pytest.ini_options]
-# Caution: UCS 5.2 uses old coverage 6.5 / pytest-cov 4.0. It calculates coverage percentage differently to newer versions.
-addopts = "-lvv --cov --cov-report term-missing --cov-fail-under 20 --junit-xml=pytest-junit.xml"
+# Caution: UCS 5.2 uses old coverage 6.5 / pytest-cov 4.0.
+# It calculates coverage percentage differently to newer versions.
+# Newer coverage calculates ~70%, in UCS 5.2 it's only ~20%.
+addopts = [
+    "-lvv",
+    "--cov",
+    "--cov-config=pyproject.toml",
+    "--cov-report=term-missing",
+    "--cov-report=xml:coverage.xml",
+    "--cov-fail-under=20",
+    "--junit-xml=pytest-junit.xml",
+]
 
 ### linters ###
 
