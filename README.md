@@ -241,6 +241,39 @@ logger.info("After.")
 2025-03-17 10:41:08.064 +0100 |    INFO | main.<module>:24 | Before... | ip=192.168.0.1 user="some one"
 2025-03-17 10:41:08.064 +0100 |    INFO | main.<module>:28 | Working on task. | task=24589179594642 ip=192.168.0.1 user="some one"
 2025-03-17 10:41:08.064 +0100 |    INFO | main.<module>:30 | After. | ip=192.168.0.1 user="some one"
+
+## Listener and UMC modules, UDM extensions (univention-debug)
+
+The Listener modules, UMC modules, UDM, and UDM extensions use "univention-debug" (UD) to write logs.
+UD is implemented in C with Python bindings.
+It has very limited configurability, unusual log levels, and a cumbersome API.
+It doesn't support configurable sinks or handlers like Python logging and Loguru,
+so its output can't be redirected into them.
+
+Lancelog could be made to work in Listener modules, UMC modules, UDM, and UDM extensions,
+by sending its output to UD instead of STDOUT.
+
+But I have decided against implementing this feature.
+UD is deprecated, and supporting it will only increase Lancelog's complexity without a strong need,
+because there is an alternative.
+
+If you wish to work on those module, please use univention-logging (UL):
+
+```python
+import logging
+
+logger = logging.getLogger("ADMIN").getChild(__name__)  # set the UD category "ADMIN", get a local logger instance
+
+logger.info("test")
+```
+
+Don't forget to configure UL at the main entrypoint of your application
+(doesn't apply if you are working on a plugin like a Listener module, UMC module, or UDM extension):
+
+```python
+import univention.logging
+
+univention.logging.basicConfig(level=logging.INFO)
 ```
 
 ## Background
