@@ -12,7 +12,11 @@ from __future__ import annotations
 import functools
 import inspect
 import logging
+import os
 import sys
+import threading
+from collections.abc import Callable
+from dataclasses import dataclass
 from enum import Enum
 from importlib.metadata import version
 from typing import TextIO
@@ -22,7 +26,26 @@ import loguru
 from loguru import logger
 
 
+# Regular expression that matches a log record of LOG_FORMAT_DEFAULT:
+ADR0010_REGEX = (
+    r"^(?P<date>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3,6}\+\d{2}:?\d{2}) +"
+    r"(?P<level>\w+?) +\[(?P<request_id>.*?)\] (?P<message>.+?)\t\| (?P<data>.*?)$"
+)
 LOG_FORMAT_DEFAULT = (
+    "{_syslog_prio}"
+    "<green>{time:YYYY-MM-DDTHH:mm:ss.SSSZ}</green> "
+    "<level>{level:<8}</level> "
+    "[{request_id:>10}] "
+    "<level>{message}</level>\t| "
+    "{extra[serialized]}"
+)
+# Regular expression that matches a log record before ADR 0010 / version 0.3.0:
+PRE030_REGEX = (
+    r"^(?P<date>\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d.\d\d\d \+\d\d\d\d) \| +"
+    r"(?P<level>\w+?) \| (?P<source>.+?) \| (?P<message>.+?) \| (?P<data>.*?)$"
+)
+# Log format before ADR 0010 / version 0.3.0:
+LOG_FORMAT_PRE_v030 = (
     "{_syslog_prio}"
     "<green>{time:YYYY-MM-DD HH:mm:ss.SSS ZZ}</green> | "
     "<level>{level:>7}</level> | "
@@ -33,6 +56,7 @@ LOG_FORMAT_DEFAULT = (
 LOG_FORMAT_JSON = "{message}"
 # Add to this, if you wish to move a logger from DEBUG to TRACE:
 LOG_LEVEL_DEBUG_TO_TRACE = {"http.client", "urllib3.connectionpool"}
+REQUEST_ID_LENGTH = 10  # request IDs will be shortened to this length
 
 
 class DataFormat(str, Enum):
@@ -49,6 +73,18 @@ class LogLevel(str, Enum):
     CRITICAL = "CRITICAL"
 
 
+@dataclass
+class DataSectionOptions:
+    log_level: bool = False  # value: str ("INFO")
+    request_id: bool = False  # value: str ("9f5ea85512")
+    process_id: bool = False  # value: int (165163)
+    source_ref_key: str = "_source"  # name of field for source of log record, value: "{module}.{function}:{line}"
+    time: bool = False  # ISO8601 format, value: str
+    timestamp: bool = False  # UNIX timestamp, value: float
+    thread_id: bool = False  # value: int
+    thread_name: bool = False  # value: str
+
+
 def setup_logging(
     sink: TextIO = sys.stdout,
     fmt: str | None = None,
@@ -57,6 +93,9 @@ def setup_logging(
     colorize: bool | None = None,
     data_format: DataFormat = DataFormat.LOGFMT,
     syslog_prio_prefix: bool = False,
+    enqueue: bool = False,
+    request_id_func: Callable[[], str] | None = None,
+    data_options: DataSectionOptions | None = None,
 ) -> None:
     """
     Configure logging.
@@ -64,7 +103,8 @@ def setup_logging(
     :param sink: A "file-like object" like `sys.stdout` (default), `sys.stderr`,
         an opened file, or a file path as `str` or `pathlib.Path`.
     :param fmt: The template used to format logged messages. Does not apply for JSON output.
-        Default is `lancelog.setup.LOG_FORMAT_DEFAULT`.
+        The default format (`lancelog.LOG_FORMAT_DEFAULT`) in version 0.3.0 conforms to ADR 0010.
+        If you wish to use the previous format, set `fmt` to `lancelog.LOG_FORMAT_PRE_v030`.
     :param level: Minimum severity level of messages to send to the sink. Default is "INFO".
     :param filter: Decide for each logged message whether it should be emitted or discarded.
         A mapping from module names to minimum required level.
@@ -76,16 +116,32 @@ def setup_logging(
     :param syslog_prio_prefix: Whether to prefix logs with a Syslog priority marker. Disabled by default.
         Syslog and Journald require this to detect the log level of a log message.
         Auto-disabled, if `sink` is connected to a terminal.
+    :param bool enqueue: Whether log messages should be sent through a multiprocessing-safe queue to the sink.
+        Useful when logging concurrently from multiple processes or threads. Makes logging calls non-blocking.
+        Disabled by default.
+    :param Callable request_id_func: Function that returns a request ID string to be added to each log record.
+        If omitted, the request ID will be `-`.
+    :param DataSectionOptions data_options: Optional values added to the data section of every log record.
+        When writing JSON, values will be in to the `extra` field.
     :return: None
     """
     sink_is_tty = hasattr(sink, "write") and sink.isatty()
+    if data_format not in (DataFormat.JSON, DataFormat.LOGFMT):
+        raise ValueError(f"Unsupported 'data_format' setting: {data_format!r}")
+    if fmt is not None:
+        record_fmt = fmt
+    elif data_format == DataFormat.JSON:
+        record_fmt = LOG_FORMAT_JSON
+    else:
+        record_fmt = LOG_FORMAT_DEFAULT
     kwargs = {
         "sink": sink,
-        "format": fmt if fmt is not None else LOG_FORMAT_JSON if data_format == DataFormat.JSON else LOG_FORMAT_DEFAULT,
+        "format": record_fmt,
         "level": level.value if isinstance(level, LogLevel) else level,
         "colorize": colorize if colorize is not None else data_format != DataFormat.JSON and sink_is_tty,
         "filter": filter,
         "serialize": data_format == DataFormat.JSON,
+        "enqueue": enqueue,
     }
     logger.remove()
     logger.add(**kwargs)
@@ -93,11 +149,23 @@ def setup_logging(
         patcher=functools.partial(
             _patching,
             data_format=data_format,
+            data_options=data_options,
+            fmt=record_fmt,
+            request_id_func=request_id_func,
             syslog_prio_prefix=syslog_prio_prefix and not sink_is_tty,
         )
     )
     logging.basicConfig(handlers=[_InterceptHandler()], level=0, force=True)
-    logger.debug("Configured logging.", lancelog_version=version("lancelog"), config=kwargs, sink_is_tty=sink_is_tty)
+    logger.debug(
+        "Configured logging.",
+        version=version("lancelog"),
+        **{k: v if isinstance(v, str) else repr(v) for k, v in kwargs.items()},
+        data_format=data_format.value,
+        syslog_prio_prefix=syslog_prio_prefix,
+        request_id_func=repr(request_id_func),
+        data_options=repr(data_options),
+        sink_is_tty=sink_is_tty,
+    )
 
 
 def _log_level_to_syslog_priority(level: int) -> int:
@@ -114,17 +182,49 @@ def _log_level_to_syslog_priority(level: int) -> int:
         return 2
 
 
-def _patching(record: loguru.Record, data_format: DataFormat, syslog_prio_prefix: bool) -> None:
+def _patching(
+    record: loguru.Record,
+    data_format: DataFormat,
+    data_options: DataSectionOptions | None,
+    fmt: str,
+    request_id_func: Callable[[], str] | None,
+    syslog_prio_prefix: bool,
+) -> None:
     """
-    Serialize log record to Logfmt or JSON,
-    optionally add sd-daemon prefix with Syslog priority.
+    Serialize log record to Logfmt or JSON, add optional data.
+    Escape pipe and new lines in message.
     """
+    if record["level"].name.startswith("Level "):
+        # Unknown log level, check if Python logging knows it. It'll fall back to "Level <int>".
+        record["level"].name = logging.getLevelName(record["level"].no).replace(" ", "")
+    if "\n" in record["message"]:
+        record["message"] = repr(record["message"])
+    if "\t| " in record["message"]:
+        record["message"] = record["message"].replace("\t| ", "\t\| ")  # noqa: W605
+    data_options = data_options or DataSectionOptions()
+    request_id = request_id_func() if request_id_func else "-"
+    if data_options.log_level:
+        record["extra"]["log_level"] = record["level"].name
+    if data_options.request_id:
+        record["extra"]["request_id"] = request_id
+    if data_options.process_id:
+        record["extra"]["process_id"] = os.getpid()
+    if data_options.time:
+        record["extra"]["time"] = record["time"].isoformat()
+    if data_options.timestamp:
+        record["extra"]["timestamp"] = record["time"].timestamp()
+    if data_options.thread_id:
+        record["extra"]["thread_id"] = threading.current_thread().ident
+    if data_options.thread_name:
+        record["extra"]["thread_name"] = threading.current_thread().name
+
     if data_format == DataFormat.JSON:
-        pass
+        record["extra"]["request_id"] = request_id
     elif data_format == DataFormat.LOGFMT:
+        if fmt != LOG_FORMAT_PRE_v030:
+            record["request_id"] = request_id[:REQUEST_ID_LENGTH]
+            record["extra"][data_options.source_ref_key] = f"{record['module']}.{record['function']}:{record['line']}"
         record["extra"]["serialized"] = logfmter.Logfmter.format_params(record["extra"])
-    else:
-        raise ValueError(f"Unsupported format in 'data_format': {data_format!r}")
     record["_syslog_prio"] = f"<{_log_level_to_syslog_priority(record['level'].no)}>" if syslog_prio_prefix else ""
 
 

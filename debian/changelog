@@ -1,6 +1,13 @@
 lancelog (0.3.0) unstable; urgency=low
 
+  * feat: adapt format of log record to updated ADR 0010 Log Format
+    (univention/dev/libraries/lancelog#3)
+  * BREAKING CHANGE: While Lancelog's API didn't change, the modification of
+    the output format can be a breaking change for those that parse log files.
+    To revert to the old format set `fmt` to `lancelog.LOG_FORMAT_PRE_v030`.
   * feat: use Loguru's JSON serialization code, remove orjson requirement
+  * feat: provide options to enrich data section
+    (univention/dev/libraries/lancelog#4)
 
  -- Daniel Troeder <troeder@univention.de>  Mon, 15 Sep 2025 16:24:58 +0200
 

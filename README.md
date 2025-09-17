@@ -50,8 +50,8 @@ url = "https://git.knut.univention.de/api/v4/projects/1449/packages/pypi/simple"
 3. Use the logger: `logger.info("Hello")`
 
 Calls to the Python logging libraries are intercepted and redirected into Loguru.
-But, while it is possible to use Python logging, it is discouraged, because it doesn't provide structured logging
-(see section [Structured logging](#Structured%20logging)).
+But, while mixed use of Loguru and Python logging is possible, it is discouraged,
+because Python logging doesn't provide structured logging (see section [Structured logging](#Structured%20logging)).
 
 ### Initialization
 
@@ -76,6 +76,9 @@ def setup_logging(
     colorize: bool | None = None,
     data_format: DataFormat = DataFormat.LOGFMT,
     syslog_prio_prefix: bool = False,
+    enqueue: bool = False,
+    request_id_func: Callable[[], str] = None,
+    data_options: DataSectionOptions | None = None,
 ) -> None:
     """
     Configure logging.
@@ -83,7 +86,8 @@ def setup_logging(
     :param sink: A "file-like object" like `sys.stdout` (default), `sys.stderr`,
         an opened file, or a file path as `str` or `pathlib.Path`.
     :param fmt: The template used to format logged messages. Does not apply for JSON output.
-        Default is `lancelog.setup.LOG_FORMAT_DEFAULT`.
+        The default format (`lancelog.LOG_FORMAT_DEFAULT`) in version 0.3.0 conforms to ADR 0010.
+        If you wish to use the previous format, set `fmt` to `lancelog.LOG_FORMAT_PRE_v030`.
     :param level: Minimum severity level of messages to send to the sink. Default is "INFO".
     :param filter: Decide for each logged message whether it should be emitted or discarded.
         A mapping from module names to minimum required level.
@@ -95,7 +99,14 @@ def setup_logging(
     :param syslog_prio_prefix: Whether to prefix logs with a Syslog priority marker. Disabled by default.
         Syslog and Journald require this to detect the log level of a log message.
         Auto-disabled, if `sink` is connected to a terminal.
+    :param bool enqueue: Whether log messages should be sent through a multiprocessing-safe queue to the sink.
+        Useful when logging concurrently from multiple processes or threads. Makes logging calls non-blocking.
+        Disabled by default.
+    :param Callable request_id_func: Function that returns a request ID string to be added to each log record.
+        If omitted, the request ID will be `-`.
     :return: None
+    :param DataSectionOptions data_options: Optional values added to the data section of every log record.
+        When writing JSON, values will be in to the `extra` field.
     """
 ```
 
@@ -110,11 +121,126 @@ Best practice is to use the defaults:
   If the logs will be consumed by a system that supports the "sd-daemon prefix" to detect Syslog priorities
   (e.g., Syslog and Journald), enable it, otherwise disable it.
 
+#### Breaking format change in version 0.3.0
+
+While Lancelog's API didn't change,
+the modification of the output format can be a breaking change for those that parse log files.
+
+To revert to the old format set `fmt` to `lancelog.LOG_FORMAT_PRE_v030`.
+
+```python
+>>> from lancelog import LOG_FORMAT_PRE_v030, setup_logging
+>>> from loguru import logger
+
+# use new default, conforming to ADR 0010 (lancelog.LOG_FORMAT_DEFAULT):
+>>> setup_logging()
+>>> logger.info("Hello", target="world")
+2025-09-16T09:45:09.787+02:00 INFO     [         -] Hello | target=world _source=<stdin>.<module>:1
+
+# use pre-0.3.0 format:
+>>> setup_logging(fmt=LOG_FORMAT_PRE_v030)
+>>> logger.info("Hello", target="world")
+2025-09-16 09:45:13.691 +02:00 |    INFO | <stdin>.<module>:1 | Hello | target=world
+```
+
+#### Additional values for the data section
+
+When you write a multithreaded or multiprocess applications,
+to comply with [ADR 0010 Log format](https://git.knut.univention.de/univention/decision-records/-/blob/main/dev/0010-log-messages.md),
+you must add the thread or process ID to each log record.
+
+When you configure a parser in your log analyzing software,
+you may wish to read the date from the data instead of the header section.
+
+Those and other value can be automatically added to the data section (or the `extra` field in JSON output)
+by creating a `DataSectionOptions` object and passing it to `setup_logging()`.
+
+```python
+class DataSectionOptions:
+    log_level: bool = False  # value: str ("INFO")
+    request_id: bool = False  # value: str ("9f5ea85512")
+    process_id: bool = False  # value: int (165163)
+    source_ref_key: str = "_source"  # name of field for source of log record, value: "{module}.{function}:{line}"
+    time: bool = False  # ISO8601 format, value: str
+    timestamp: bool = False  # UNIX timestamp, value: float
+    thread_id: bool = False  # value: int
+    thread_name: bool = False  # value: str
+```
+
+By default, all options are deactivated (`source_ref_key` is set to the default).
+In the following example they have all been activated:
+
+```python
+>>> from lancelog import DataSectionOptions, setup_logging; from loguru import logger; from uuid import uuid4
+>>> options = DataSectionOptions(log_level=True, request_id=True, process_id=True, source_ref_key="SRC", time=True, timestamp=True, thread_id=True, thread_name=True)
+>>> setup_logging(request_id_func=lambda: uuid4().hex, data_options=options)
+>>> logger.info("Hello", target="world")
+2025-09-16T08:58:18.421+02:00 INFO     [ccb6463c5c] Hello | target=world log_level=INFO request_id=ccb6463c5c174e59ac6759cf0fee50bf process_id=1651638 time=2025-09-16T08:58:18.421830+02:00 timestamp=1758005898.42183 thread_id=137915718510400 thread_name=MainThread SRC=<stdin>.<module>:1
+```
+
+#### Add a request ID
+
+To add a correlation/request ID to each log record,
+set `request_id_func` to a function that accepts no arguments and returns a string.
+The string will be shortened to the first 10 characters in the output.
+If `request_id_func` is not set, a dash (`-`) will be logged.
+
+```python
+>>> from uuid import uuid4
+>>> from lancelog import setup_logging
+>>> from loguru import logger
+
+>>> setup_logging(request_id_func=lambda: uuid4().hex)
+
+>>> logger.info("The event", foo="´bar")
+2025-09-15T15:49:39.851+02:00     INFO [203fb82039] The event | foo=bar _source=<stdin>.<module>:1
+```
+
+When creating HTTP APIs, good experiences exist using the [asgi-correlation-id](https://github.com/snok/asgi-correlation-id) library.
+It's easy to tie it into Lancelog:
+
+```python
+from asgi_correlation_id import correlation_id
+
+setup_logging(request_id_func=correlation_id.get)
+```
+
+#### Move log level from DEBUG to TRACE
+
+The logs of the `http.client` and `urllib3` libraries at `DEBUG` level contain sensitive information.
+So, we're lowering all `DEBUG` level output to `TRACE`.
+
+The mechanism is extensible.
+If you wish to move the `DEBUG` output of other loggers to `TRACE`:
+
+```python
+from lancelog import LOG_LEVEL_DEBUG_TO_TRACE
+
+LOG_LEVEL_DEBUG_TO_TRACE.add("logger_name")
+```
+
+```python
+>>> import logging
+>>> from lancelog import setup_logging, LOG_LEVEL_DEBUG_TO_TRACE
+>>> setup_logging(level="DEBUG")
+
+>>> py_logger = logging.getLogger("noisy_lib")
+>>> py_logger.debug("Private data")
+2025-09-15T16:51:40.450+02:00 DEBUG    [         -] Private data | _source=<stdin>.<module>:1
+
+>>> LOG_LEVEL_DEBUG_TO_TRACE.add("noisy_lib")
+>>> py_logger.debug("Private data")
+
+>>> setup_logging(level="TRACE")
+>>> py_logger.debug("Private data")
+2025-09-15T16:52:09.900+02:00 TRACE    [         -] Private data | _source=<stdin>.<module>:1
+```
+
 ### Structured logging
 
-Structured logging is not only the output format.
+Structured logging is not only about the output format.
 
-For your logs to be well parsable by humans and machines, the event and the data must be separately recognizable.
+For your logs to be well parsable by humans and machines, the event message and the event data must be separately recognizable.
 
 Name the event in the message and keep the data separate:
 
@@ -127,6 +253,11 @@ This will create logs that are readable for humans,
 easy to analyse using CLI tools (`less`, `vi`, `grep`, `wc`),
 and are directly digestible by log aggregators like [Logstash](https://www.elastic.co/logstash) and [Graylog](https://graylog.org).
 
+```diff
+- 2025-09-15T16:55:51.111+02:00 INFO     [         -] Created user with username 'Daniel' and gid 1000. | _source=<stdin>.<module>:1
++ 2025-09-15T16:55:51.111+02:00 INFO     [         -] Created user. | username=Daniel gid=1000 _source=<stdin>.<module>:1
+```
+
 #### Bind values
 
 Structured logging libraries offer a convenient way to assemble the data to log, by contextualizing the logger instance.
@@ -138,11 +269,14 @@ from loguru import logger
 
 logger = logger.bind(ip="192.168.0.1", user="some one")
 
-logger.info("Hello world.", dimensions=4)
-```
+def hello():
+    logger.info("Hello world.", dimensions=4)
+
+hello()
+````
 
 ```text
-2025-03-17 10:23:56.821 +0100 |    INFO | somewhere_else.<module>:5 | Hello world. | ip=192.168.0.1 user="some one" dimensions=4
+2025-09-15T16:30:42.500+02:00 INFO     [         -] Hello world. | ip=192.168.0.1 user="some one" dimensions=4 _source=somewhere_else.hello:6
 ```
 
 #### Catch errors
@@ -160,14 +294,14 @@ div_zero(0)
 ```
 
 ```text
-2025-03-17 10:32:23.989 +0100 |   ERROR | catch.<module>:14 | An error has been caught in function '<module>', process 'MainProcess' (2538020), thread 'MainThread' (135891779491648): |
+2025-09-15T16:34:04.726+02:00 ERROR    [         -] An error has been caught in function '<module>', process 'MainProcess' (1576260), thread 'MainThread' (135186368079680): | _source=catch.<module>:7
 Traceback (most recent call last):
 
-> File "catch.py", line 14, in <module>
+> File "/home/dtroeder/git/dev/libraries/lancelog/catch.py", line 7, in <module>
     div_zero(0)
-    └ <function div_zero at 0x7b97c48289a0>
+    └ <function div_zero at 0x7af385dafa60>
 
-  File "catch.py", line 12, in div_zero
+  File "/home/dtroeder/git/dev/libraries/lancelog/catch.py", line 5, in div_zero
     100 / x
           └ 0
 
@@ -200,13 +334,18 @@ with logger.catch(message="Reading configuration file.", level="ERROR", reraise=
 ```
 
 ```text
-2025-03-17 10:36:27.654 +0100 |   ERROR | catch.<module>:19 | Reading configuration file. | filename=/etc/shadow
+2025-09-15T16:36:30.884+02:00 ERROR    [         -] Reading configuration file. | _source=catch.<module>:5
 Traceback (most recent call last):
 
-> File "catch.py", line 20, in <module>
+> File "/home/dtroeder/git/dev/libraries/lancelog/catch.py", line 6, in <module>
     cfg = open(filename, "r").read()
                └ '/etc/shadow'
 
+PermissionError: [Errno 13] Permission denied: '/etc/shadow'
+Traceback (most recent call last):
+  File "/home/dtroeder/git/dev/libraries/lancelog/catch.py", line 6, in <module>
+    cfg = open(filename, "r").read()
+          ^^^^^^^^^^^^^^^^^^^
 PermissionError: [Errno 13] Permission denied: '/etc/shadow'
 ```
 
@@ -228,9 +367,10 @@ logger.info("After.")
 ```
 
 ```text
-2025-03-17 10:41:08.064 +0100 |    INFO | main.<module>:24 | Before... | ip=192.168.0.1 user="some one"
-2025-03-17 10:41:08.064 +0100 |    INFO | main.<module>:28 | Working on task. | task=24589179594642 ip=192.168.0.1 user="some one"
-2025-03-17 10:41:08.064 +0100 |    INFO | main.<module>:30 | After. | ip=192.168.0.1 user="some one"
+2025-09-15T16:38:10.790+02:00 INFO     [         -] Before... | _source=main.<module>:4
+2025-09-15T16:38:10.790+02:00 INFO     [         -] Working on task. | task=24589179594642 _source=main.<module>:8
+2025-09-15T16:38:10.790+02:00 INFO     [         -] After. | _source=main.<module>:10
+```
 
 ## Listener and UMC modules, UDM extensions (univention-debug)
 
@@ -273,7 +413,7 @@ Univention has a comprehensive concept for logging and multiple ADRs that define
 - [Concept](https://git.knut.univention.de/univention/internal/research-library/-/blob/main/research/logging_concept/README.md)
 - [ADR 0004 Logging Topology](https://git.knut.univention.de/univention/decision-records/-/blob/main/dev/0004-logging-topology.md)
 - [ADR 0005 Log levels](https://git.knut.univention.de/univention/decision-records/-/blob/main/dev/0005-log-levels.md)
-- [ADR 0006 Log format](https://git.knut.univention.de/univention/decision-records/-/blob/main/dev/0006-log-format.md)
+- [ADR 0010 Log format](https://git.knut.univention.de/univention/decision-records/-/blob/main/dev/0010-log-messages.md) (supersedes [ADR 0006 Log format](https://git.knut.univention.de/univention/decision-records/-/blob/main/dev/0006-log-format.md))
 - [ADR 0007 Log messages](https://git.knut.univention.de/univention/decision-records/-/blob/main/dev/0007-log-messages.md)
 - [ADR 0008 Structured logging](https://git.knut.univention.de/univention/decision-records/-/blob/main/dev/0008-structured-logging.md)
 
@@ -296,20 +436,6 @@ Sensitive data, including technical secrets like passwords and tokens,
 and personal information like username, real name, password, email, postal address,
 MUST only be logged at level `TRACE`.
 
-## Move level from DEBUG to TRACE
-
-The logs of the `http.client` and `urllib3` libraries at `DEBUG` level contain sensitive information.
-So, we're lowering all `DEBUG` level output to `TRACE`.
-
-The mechanism is extensible.
-If you wish to move the `DEBUG` output of other loggers to `TRACE`:
-
-```python
-from lancelog import LOG_LEVEL_DEBUG_TO_TRACE
-
-LOG_LEVEL_DEBUG_TO_TRACE.add("logger_name")
-```
-
 ## Development
 
 This project uses [pre-commit](https://pre-commit.com/) for managing and maintaining pre-commit hooks.
@@ -321,6 +447,8 @@ See their respective web pages for installation and usage instructions.
 ### Tests
 
 ```shell
+uv sync --all-extras
+
 uv run pytest
 ```
 
