@@ -20,8 +20,6 @@ Depends:
  python3-loguru,
  ${misc:Depends},
  ${python3:Depends},
-Recommends:
- python3-orjson,
 Description: Python 3 library to help developers set up logging in their applications in an easy and consistent way.
  .
  It is part of Univention Corporate Server (UCS), an

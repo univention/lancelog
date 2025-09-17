@@ -23,16 +23,6 @@ pip install lancelog \
   --index-url https://git.knut.univention.de/api/v4/projects/1449/packages/pypi/simple
 ```
 
-By default, _lancelog_ will write in [Logfmt](https://brandur.org/logfmt) format.
-If you wish to write JSON instead, install:
-
-```shell
-pip install lancelog[json] \
-  --index-url https://git.knut.univention.de/api/v4/projects/1449/packages/pypi/simple
-```
-
-This will pull in the [orjson](https://github.com/ijl/orjson) library.
-
 ### Usage in pyproject.toml
 
 To reference _lancelog_ in your projects `pyproject.toml`:

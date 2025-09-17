@@ -1,6 +1,6 @@
 [project]
 name = "lancelog"
-version = "0.2.3"
+version = "0.3.0"
 description = "Setup logging like a hero."
 readme = "README.md"
 authors = [{ name = "Daniel Troeder", email = "troeder@univention.de" }]
@@ -27,9 +27,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-json = [
-    "orjson>=3.10.15",
-]
 test = [
     "pytest>=7",
     "pytest-cov>=4",

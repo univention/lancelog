@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.3.0] - 2025-09-15
+
+- feat: use Loguru's JSON serialization code, remove orjson requirement
+
 ## [0.2.3] - 2025-05-30
 
 - fix: switch project to src-layout, add tests

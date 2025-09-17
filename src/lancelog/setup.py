@@ -9,9 +9,7 @@ setup_logging()
 
 from __future__ import annotations
 
-import contextlib
 import functools
-import importlib.util
 import inspect
 import logging
 import sys
@@ -21,10 +19,6 @@ from typing import TextIO
 
 import logfmter
 import loguru
-
-
-with contextlib.suppress(ImportError):
-    import orjson
 from loguru import logger
 
 
@@ -84,11 +78,6 @@ def setup_logging(
         Auto-disabled, if `sink` is connected to a terminal.
     :return: None
     """
-    if data_format == DataFormat.JSON and not importlib.util.find_spec("orjson"):
-        raise ImportError(
-            "The 'orjson' library is required to serialize logs to JSON. Please run 'pip install lancelog[json]'."
-        )
-
     sink_is_tty = hasattr(sink, "write") and sink.isatty()
     kwargs = {
         "sink": sink,
@@ -131,11 +120,7 @@ def _patching(record: loguru.Record, data_format: DataFormat, syslog_prio_prefix
     optionally add sd-daemon prefix with Syslog priority.
     """
     if data_format == DataFormat.JSON:
-        record["extra"]["serialized"] = orjson.dumps(
-            record["extra"],
-            default=str,
-            option=orjson.OPT_NON_STR_KEYS | orjson.OPT_SORT_KEYS,
-        ).decode()
+        pass
     elif data_format == DataFormat.LOGFMT:
         record["extra"]["serialized"] = logfmter.Logfmter.format_params(record["extra"])
     else:
