@@ -24,6 +24,7 @@ from typing import TextIO
 import logfmter
 import loguru
 from loguru import logger
+from loguru._better_exceptions import ExceptionFormatter
 
 
 # Regular expression that matches a log record of LOG_FORMAT_DEFAULT:
@@ -57,6 +58,8 @@ LOG_FORMAT_JSON = "{message}"
 # Add to this, if you wish to move a logger from DEBUG to TRACE:
 LOG_LEVEL_DEBUG_TO_TRACE = {"http.client", "urllib3.connectionpool"}
 REQUEST_ID_LENGTH = 10  # request IDs will be shortened to this length
+
+_exc_formatter = ExceptionFormatter(backtrace=True, diagnose=True, colorize=False)
 
 
 class DataFormat(str, Enum):
@@ -201,6 +204,8 @@ def _patching(
         record["message"] = repr(record["message"])
     if "\t| " in record["message"]:
         record["message"] = record["message"].replace("\t| ", "\t\| ")  # noqa: W605
+    if record["exception"] and all(record["exception"]):
+        record["extra"]["_traceback"] = "".join(_exc_formatter.format_exception(*record["exception"]))
     data_options = data_options or DataSectionOptions()
     request_id = request_id_func() if request_id_func else "-"
     if data_options.log_level:

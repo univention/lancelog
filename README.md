@@ -372,6 +372,11 @@ logger.info("After.")
 2025-09-15T16:38:10.790+02:00 INFO     [         -] After. | _source=main.<module>:10
 ```
 
+#### Tracebacks
+
+When calling `logger.exception()` in an exception handler,
+traceback are both printed as multi-line text and added to data in field `_traceback`.
+
 ## Listener and UMC modules, UDM extensions (univention-debug)
 
 The Listener modules, UMC modules, UDM, and UDM extensions use "univention-debug" (UD) to write logs.

@@ -11,6 +11,7 @@
 - feat: use Loguru's JSON serialization code, remove orjson requirement
 - feat: provide options to enrich data section
   ([univention/dev/libraries/lancelog#4](https://git.knut.univention.de/univention/dev/libraries/lancelog/-/issues/4))
+- feat: when calling `logger.exception()`, traceback are both printed as multi-line text and added to data in field `_traceback`
 
 ## [0.2.3] - 2025-05-30
 

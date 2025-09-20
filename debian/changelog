@@ -8,6 +8,8 @@ lancelog (0.3.0) unstable; urgency=low
   * feat: use Loguru's JSON serialization code, remove orjson requirement
   * feat: provide options to enrich data section
     (univention/dev/libraries/lancelog#4)
+  * feat: when calling `logger.exception()`, traceback are both printed as
+    multi-line text and added to data in field `_traceback`
 
  -- Daniel Troeder <troeder@univention.de>  Mon, 15 Sep 2025 16:24:58 +0200
 
