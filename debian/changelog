@@ -10,6 +10,7 @@ lancelog (0.3.0) unstable; urgency=low
     (univention/dev/libraries/lancelog#4)
   * feat: when calling `logger.exception()`, traceback are both printed as
     multi-line text and added to data in field `_traceback`
+  * test: add tests for all use cases and full coverage
 
  -- Daniel Troeder <troeder@univention.de>  Mon, 15 Sep 2025 16:24:58 +0200
 
