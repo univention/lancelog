@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.1] - 2025-09-24
+
+- fix: export 'logger' from 'loguru' to simplify imports
+- test: fix side effect of test
+- ci: build Debian package
+
 ## [0.3.0] - 2025-09-15
 
 - feat: adapt format of log record to updated ADR:

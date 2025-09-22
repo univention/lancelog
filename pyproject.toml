@@ -55,7 +55,7 @@ addopts = [
     "--cov-config=pyproject.toml",
     "--cov-report=term-missing",
     "--cov-report=xml:coverage.xml",
-    "--cov-fail-under=20",
+    "--cov-fail-under=100",
     "--junit-xml=pytest-junit.xml",
 ]
 

@@ -4,11 +4,23 @@ import json
 import logging
 import re
 import sys
+from collections.abc import Callable, Generator
+from typing import Any
 
+import pytest
 from _pytest.capture import CaptureFixture
 
 from lancelog import LOG_LEVEL_DEBUG_TO_TRACE, DataFormat, setup_logging
 from lancelog.setup import ADR0010_REGEX
+
+
+PY_LOGGER_NAME_1 = "test_abc"
+
+
+@pytest.fixture  # type: ignore
+def remove_logger_from_debug_to_trace() -> Generator[None, Any, None]:
+    yield
+    LOG_LEVEL_DEBUG_TO_TRACE.remove(PY_LOGGER_NAME_1)
 
 
 def test_intercept_python_logging(capsys: CaptureFixture) -> None:
@@ -23,9 +35,10 @@ def test_intercept_python_logging(capsys: CaptureFixture) -> None:
     assert parsed["message"] == "Hello World"
 
 
-def test_log_level_debug_to_trace(capsys: CaptureFixture) -> None:
-    py_logger_name = "test_abc"
-    py_logger = logging.getLogger(py_logger_name)
+def test_log_level_debug_to_trace(
+    capsys: CaptureFixture, remove_logger_from_debug_to_trace: Callable[[], Generator[None, Any, None]]
+) -> None:
+    py_logger = logging.getLogger(PY_LOGGER_NAME_1)
     setup_logging(sink=sys.stderr, level="TRACE")
     py_logger.debug("Hello debug")
     captured = capsys.readouterr()
@@ -36,7 +49,7 @@ def test_log_level_debug_to_trace(capsys: CaptureFixture) -> None:
     assert parsed["message"] == "Hello debug"
     assert parsed["level"] == "DEBUG"
 
-    LOG_LEVEL_DEBUG_TO_TRACE.add(py_logger_name)
+    LOG_LEVEL_DEBUG_TO_TRACE.add(PY_LOGGER_NAME_1)
     py_logger.debug("Hello trace")
     captured = capsys.readouterr()
     m = re.match(ADR0010_REGEX, captured.err)

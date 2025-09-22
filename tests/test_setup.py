@@ -11,9 +11,8 @@ from importlib.metadata import version
 
 import pytest
 from _pytest.capture import CaptureFixture
-from loguru import logger
 
-from lancelog import LOG_FORMAT_DEFAULT, DataFormat, DataSectionOptions, LOG_FORMAT_PRE_v030, setup_logging
+from lancelog import LOG_FORMAT_DEFAULT, DataFormat, DataSectionOptions, LOG_FORMAT_PRE_v030, logger, setup_logging
 from lancelog.setup import ADR0010_REGEX, PRE030_REGEX, _log_level_to_syslog_priority
 
 
@@ -32,7 +31,7 @@ def test_debug_version_msg(capsys: CaptureFixture) -> None:
     assert "syslog_prio_prefix=false" in captured.err
     assert "request_id_func=None" in captured.err
     assert "data_options=None" in captured.err
-    assert "sink_is_tty=false" in captured.err
+    assert "LOG_LEVEL_DEBUG_TO_TRACE=\"['http.client', 'urllib3.connectionpool']\"" in captured.err
     assert "_source=setup.setup_logging:" in captured.err
 
 
