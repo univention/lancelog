@@ -11,22 +11,25 @@ variables:
   # GitLab CI creates a separate mountpoint for the build directory,
   # so we need to copy instead of using hard links.
   UV_LINK_MODE: copy
+  DEBIAN_PACKAGE: lancelog
+  DEBIAN_RELEASE: 5.2-0-0
+  DEBIAN_SCOPE: errata5.2-3
 
 stages:
-#  - prepare
+  - prepare
   - lint
   - test
   - sonarqube
   - build
   - publish
 
-#prepare:
-#  stage: prepare
-#  script:
-#    - sed -rne '1s/^lancelog \(([^)]+)\) ([^;]+);.*/DEBVER=\1\nDEBDIST=\2/p;T;q' debian/changelog >.env
-#  artifacts:
-#    reports:
-#      dotenv: .env
+prepare:
+  stage: prepare
+  script:
+    - sed -rne '1s/^lancelog \(([^)]+)\) ([^;]+);.*/DEBVER=\1\nDEBDIST=\2/p;T;q' debian/changelog >.env
+  artifacts:
+    reports:
+      dotenv: .env
 
 run_pre_commit:
   stage: lint
@@ -35,6 +38,7 @@ run_pre_commit:
 test:
   stage: test
   image:
+#    name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/$UV_IMAGE
     name: $UV_IMAGE
   script:
     - uv sync --all-extras
@@ -63,7 +67,8 @@ sonarqube-scan:
     SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"  # Defines the location of the analysis task cache
     GIT_DEPTH: "0"  # Tells git to fetch all the branches of the project, required by the analysis task
   image:
-      name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/sonarsource/sonar-scanner-cli:11
+#      name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/sonarsource/sonar-scanner-cli:11
+      name: sonarsource/sonar-scanner-cli:11
       entrypoint: [""]
   cache:
     policy: pull-push
@@ -79,41 +84,85 @@ sonarqube-scan:
     - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_REF_PROTECTED == "true"
     - if: $CI_PIPELINE_SOURCE == "web"
 
-#build_deb_package:
-#  stage: build
-#  dependencies:
-#    - prepare
-#  rules:
-#    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
-#      when: "always"
-#    - changes:
-#      - pyproject.toml
-#      - debian/**/*
-#      - src/**/*
-#  parallel:
-#    matrix:
-#      - distribution:
-#        - debian:trixie-slim
-#        - ubuntu:24.10
-#  image: $distribution
-#  variables:
-#    DEBIAN_FRONTEND: noninteractive
-#    LC_ALL: C.UTF-8
-#  before_script:
-#    - apt-get -qq update
-#    - apt-get -q --assume-yes build-dep .
-#  script:
-#    - dpkg-buildpackage --no-sign -b
-#    - apt-get -q --assume-yes install ../python3-lancelog*.deb
-#    - rm -rf "$CI_PROJECT_DIR/public"
-#    - mkdir -p "$CI_PROJECT_DIR/public/${distribution%-slim}"
-#    - mv -v -t "$CI_PROJECT_DIR/public/${distribution%-slim}/" ../*.deb
-#    - cd "$CI_PROJECT_DIR/public/${distribution%-slim}"
-#    - dpkg-scanpackages . >Packages
-#  artifacts:
-#    paths:
-#      - public
-#    expire_in: 1 day
+build_deb_repo_import:
+  stage: build
+  variables:
+    GIT_STRATEGY: none
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_REF_PROTECTED == "true"
+  tags:
+    - omar
+  script:
+    - |
+      repo_admin.py \
+        --git "$CI_REPOSITORY_URL" \
+        --force \
+        --ignore-patches \
+        --branch "$CI_COMMIT_REF_NAME" \
+        --path "." \
+        --release "$DEBIAN_RELEASE" \
+        --scope "$DEBIAN_SCOPE" \
+        --package "$DEBIAN_PACKAGE" \
+        --verbose
+
+build_deb_repo_build:
+  stage: build
+  needs:
+    - job: build_deb_repo_import
+  variables:
+    GIT_STRATEGY: none
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_REF_PROTECTED == "true"
+  tags:
+    - ladda
+  script:
+    - |
+      build-package-ng \
+        --no-pbuilder-update \
+        --release "$DEBIAN_RELEASE" \
+        --scope "$DEBIAN_SCOPE" \
+        --package "$DEBIAN_PACKAGE"
+
+build_deb_package_for_branch:
+  stage: build
+  dependencies:
+    - prepare
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH == 'main'
+  parallel:
+    matrix:
+      - distribution:
+        - debian:bookworm-slim
+        - ubuntu:24.04
+        - ubuntu:25.04
+#  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/$distribution
+  image: $distribution
+  variables:
+    DEBIAN_FRONTEND: noninteractive
+    LC_ALL: C.UTF-8
+  before_script:
+    - apt-get update
+    - apt-get install -y ca-certificates gnupg wget
+    - wget https://updates.software-univention.de/univention-archive-key-ucs-52x.gpg -O /etc/apt/trusted.gpg.d/univention-archive-key-ucs-52x.gpg
+    - echo "deb [signed-by=/etc/apt/trusted.gpg.d/univention-archive-key-ucs-52x.gpg] https://updates.software-univention.de/ errata523 main" > /etc/apt/sources.list.d/ucs-523-errata.list
+    - apt-get update
+    - apt-get install -y python3-logfmter
+    - apt-get --assume-yes build-dep .
+  script:
+    - PYTHONPATH="$PYTHONPATH:$PWD/src" dpkg-buildpackage --no-sign -b
+    - apt-get -q --assume-yes install ../python3-lancelog*.deb
+    - rm -rf "$CI_PROJECT_DIR/public"
+    - mkdir -p "$CI_PROJECT_DIR/public/${distribution%-slim}"
+    - mv -v -t "$CI_PROJECT_DIR/public/${distribution%-slim}/" ../*.deb
+    - cd "$CI_PROJECT_DIR/public/${distribution%-slim}"
+    - dpkg-scanpackages . >Packages
+  artifacts:
+    paths:
+      - public
+    expire_in: 1 day
 
 build_pip_package:
   stage: build
@@ -121,6 +170,7 @@ build_pip_package:
     paths:
       - dist/lancelog*
     expire_in: 1 week
+#  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/$UV_IMAGE
   image: $UV_IMAGE
   script:
     - |
@@ -136,6 +186,7 @@ publish_gitlab_pip:
   stage: publish
   dependencies:
     - build_pip_package
+#  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/$UV_IMAGE
   image: $UV_IMAGE
   script:
     - uv publish --publish-url ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi --username gitlab-ci-token --password ${CI_JOB_TOKEN}

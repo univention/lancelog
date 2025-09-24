@@ -46,7 +46,7 @@ url = "https://git.knut.univention.de/api/v4/projects/1449/packages/pypi/simple"
 ## Usage
 
 1. Call `setup_logging()` in your application's startup routine.
-2. Import the Loguru logger in each module: `from loguru import logger`
+2. Import the Loguru logger in each module: `from lancelog import logger`
 3. Use the logger: `logger.info("Hello")`
 
 Calls to the Python logging libraries are intercepted and redirected into Loguru.
@@ -129,8 +129,7 @@ the modification of the output format can be a breaking change for those that pa
 To revert to the old format set `fmt` to `lancelog.LOG_FORMAT_PRE_v030`.
 
 ```python
->>> from lancelog import LOG_FORMAT_PRE_v030, setup_logging
->>> from loguru import logger
+>>> from lancelog import LOG_FORMAT_PRE_v030, logger, setup_logging
 
 # use new default, conforming to ADR 0010 (lancelog.LOG_FORMAT_DEFAULT):
 >>> setup_logging()
@@ -171,7 +170,7 @@ By default, all options are deactivated (`source_ref_key` is set to the default)
 In the following example they have all been activated:
 
 ```python
->>> from lancelog import DataSectionOptions, setup_logging; from loguru import logger; from uuid import uuid4
+>>> from lancelog import DataSectionOptions, logger, setup_logging; from uuid import uuid4
 >>> options = DataSectionOptions(log_level=True, request_id=True, process_id=True, source_ref_key="SRC", time=True, timestamp=True, thread_id=True, thread_name=True)
 >>> setup_logging(request_id_func=lambda: uuid4().hex, data_options=options)
 >>> logger.info("Hello", target="world")
@@ -187,8 +186,7 @@ If `request_id_func` is not set, a dash (`-`) will be logged.
 
 ```python
 >>> from uuid import uuid4
->>> from lancelog import setup_logging
->>> from loguru import logger
+>>> from lancelog import logger, setup_logging
 
 >>> setup_logging(request_id_func=lambda: uuid4().hex)
 
@@ -265,7 +263,7 @@ Structured logging libraries offer a convenient way to assemble the data to log,
 ```python
 # somewhere_else.py
 
-from loguru import logger
+from lancelog import logger
 
 logger = logger.bind(ip="192.168.0.1", user="some one")
 

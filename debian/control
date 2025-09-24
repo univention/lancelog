@@ -8,6 +8,8 @@ Build-Depends:
  python3-all,
  python3-dev,
  pybuild-plugin-pyproject,
+ python3-logfmter,
+ python3-loguru,
  python3-pytest,
  python3-pytest-cov,
  python3-setuptools,

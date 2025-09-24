@@ -167,7 +167,7 @@ def setup_logging(
         syslog_prio_prefix=syslog_prio_prefix,
         request_id_func=repr(request_id_func),
         data_options=repr(data_options),
-        sink_is_tty=sink_is_tty,
+        LOG_LEVEL_DEBUG_TO_TRACE=sorted(LOG_LEVEL_DEBUG_TO_TRACE),
     )
 
 

@@ -1,3 +1,11 @@
+lancelog (0.3.1) unstable; urgency=low
+
+  * fix: export 'logger' from 'loguru' to simplify imports
+  * test: fix side effect of test
+  * ci: build Debian package
+
+ -- Daniel Troeder <troeder@univention.de>  Wed, 24 Sep 2025 08:37:54 +0200
+
 lancelog (0.3.0) unstable; urgency=low
 
   * feat: adapt format of log record to updated ADR 0010 Log Format

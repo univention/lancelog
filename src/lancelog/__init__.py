@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
+from loguru import logger
+
 from .setup import (
     LOG_FORMAT_DEFAULT,
     LOG_LEVEL_DEBUG_TO_TRACE,
@@ -18,5 +20,6 @@ __all__ = [
     "DataFormat",
     "DataSectionOptions",
     "LogLevel",
+    "logger",
     "setup_logging",
 ]
