@@ -37,9 +37,7 @@ run_pre_commit:
 
 test:
   stage: test
-  image:
-#    name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/$UV_IMAGE
-    name: $UV_IMAGE
+  image: $UV_IMAGE
   script:
     - uv sync --all-extras
     - uv run pytest
@@ -67,8 +65,7 @@ sonarqube-scan:
     SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"  # Defines the location of the analysis task cache
     GIT_DEPTH: "0"  # Tells git to fetch all the branches of the project, required by the analysis task
   image:
-#      name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/sonarsource/sonar-scanner-cli:11
-      name: sonarsource/sonar-scanner-cli:11
+      name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/sonarsource/sonar-scanner-cli:11
       entrypoint: [""]
   cache:
     policy: pull-push
@@ -138,8 +135,7 @@ build_deb_package_for_branch:
         - debian:bookworm-slim
         - ubuntu:24.04
         - ubuntu:25.04
-#  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/$distribution
-  image: $distribution
+  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/$distribution
   variables:
     DEBIAN_FRONTEND: noninteractive
     LC_ALL: C.UTF-8
@@ -170,7 +166,6 @@ build_pip_package:
     paths:
       - dist/lancelog*
     expire_in: 1 week
-#  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/$UV_IMAGE
   image: $UV_IMAGE
   script:
     - |
@@ -186,7 +181,6 @@ publish_gitlab_pip:
   stage: publish
   dependencies:
     - build_pip_package
-#  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/$UV_IMAGE
   image: $UV_IMAGE
   script:
     - uv publish --publish-url ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi --username gitlab-ci-token --password ${CI_JOB_TOKEN}
