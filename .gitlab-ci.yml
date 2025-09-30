@@ -179,8 +179,8 @@ build_pip_package:
 
 publish_gitlab_pip:
   stage: publish
-  dependencies:
-    - build_pip_package
+  needs:
+    - job: build_pip_package
   image: $UV_IMAGE
   script:
     - uv publish --publish-url ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi --username gitlab-ci-token --password ${CI_JOB_TOKEN}
