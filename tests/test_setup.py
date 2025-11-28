@@ -22,7 +22,7 @@ def test_debug_version_msg(capsys: CaptureFixture) -> None:
     captured = capsys.readouterr()
     assert "Configured logging" in captured.err
     assert f"version={version('lancelog')}" in captured.err
-    assert f'format="{LOG_FORMAT_DEFAULT}"' in captured.err
+    assert f'format="{repr(LOG_FORMAT_DEFAULT)[1:-1]}"' in captured.err
     assert "colorize=False" in captured.err
     assert "filter=None" in captured.err
     assert "serialize=False" in captured.err
@@ -180,7 +180,7 @@ def test_tb_in_data_and_multi_line_output(capsys: CaptureFixture) -> None:
     ],
 )
 def test_data_section_options(capsys: CaptureFixture, opt: str, val: bool | str, exp: str) -> None:
-    data_options = DataSectionOptions(**{opt: val})  # type: ignore
+    data_options = DataSectionOptions(**{opt: val})  # type: ignore[arg-type,unused-ignore]
     setup_logging(sink=sys.stderr, data_options=data_options)
     logger.info("Hello World")
     captured = capsys.readouterr()

@@ -1,3 +1,9 @@
+lancelog (0.3.2) unstable; urgency=low
+
+  * fix: bump logfmter to a version that fixes escaping
+
+ -- Daniel Troeder <troeder@univention.de>  Fri, 28 Nov 2025 11:09:21 +0100
+
 lancelog (0.3.1) unstable; urgency=low
 
   * fix: export 'logger' from 'loguru' to simplify imports

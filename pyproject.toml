@@ -1,6 +1,6 @@
 [project]
 name = "lancelog"
-version = "0.3.1"
+version = "0.3.2"
 description = "Setup logging like a hero."
 readme = "README.md"
 authors = [{ name = "Daniel Troeder", email = "troeder@univention.de" }]
@@ -22,7 +22,7 @@ classifiers = [
 ]
 requires-python = ">=3.11"
 dependencies = [
-    "logfmter>=0.0.9",
+    "logfmter>=0.0.11",
     "loguru>=0.7.0",
 ]
 
@@ -64,6 +64,7 @@ addopts = [
 [tool.mypy]
 ignore_missing_imports = true
 pretty = true
+python_version = 3.11
 strict = true
 
 [tool.ruff]
