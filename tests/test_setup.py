@@ -12,8 +12,20 @@ from importlib.metadata import version
 import pytest
 from _pytest.capture import CaptureFixture
 
-from lancelog import LOG_FORMAT_DEFAULT, DataFormat, DataSectionOptions, LOG_FORMAT_PRE_v030, logger, setup_logging
+from lancelog import (
+    LOG_FORMAT_DEFAULT,
+    DataFormat,
+    DataSectionOptions,
+    LOG_FORMAT_PRE_v030,
+    __version__,
+    logger,
+    setup_logging,
+)
 from lancelog.setup import ADR0010_REGEX, PRE030_REGEX, _log_level_to_syslog_priority
+
+
+def test_version() -> None:
+    assert __version__ == version("lancelog")
 
 
 def test_debug_version_msg(capsys: CaptureFixture) -> None:
@@ -118,9 +130,7 @@ def test_json_format(capsys: CaptureFixture) -> None:
     logger.info(msg, target="World")
     captured = capsys.readouterr()
     parsed = json.loads(captured.err)
-    import pprint
 
-    pprint.pprint(parsed)
     assert parsed["text"] == f"{msg}\n"
     assert parsed["record"]["extra"] == {"request_id": "-", "target": "World"}
     assert parsed["record"]["file"] == {"name": "test_setup.py", "path": __file__}

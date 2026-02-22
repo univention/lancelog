@@ -88,8 +88,11 @@ class DataSectionOptions:
     thread_name: bool = False  # value: str
 
 
+_DEFAULT_DATA_OPTIONS = DataSectionOptions()
+
+
 def setup_logging(
-    sink: TextIO = sys.stdout,
+    sink: TextIO | str | os.PathLike[str] = sys.stdout,
     fmt: str | None = None,
     level: int | str | LogLevel = LogLevel.INFO,
     filter: dict[str, str | bool] | None = None,
@@ -128,7 +131,7 @@ def setup_logging(
         When writing JSON, values will be in to the `extra` field.
     :return: None
     """
-    sink_is_tty = hasattr(sink, "write") and sink.isatty()
+    sink_is_tty = not isinstance(sink, str | os.PathLike) and sink.isatty()
     if data_format not in (DataFormat.JSON, DataFormat.LOGFMT):
         raise ValueError(f"Unsupported 'data_format' setting: {data_format!r}")
     if fmt is not None:
