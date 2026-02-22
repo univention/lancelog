@@ -31,7 +31,7 @@ uv run ruff format src/ tests/
 uv run mypy src/ tests/
 
 # Run pre-commit hooks manually
-pre-commit run --all-files
+prek run --all-files
 ```
 
 Tests require **100% coverage** (`--cov-fail-under=100`); any new code must be covered.
