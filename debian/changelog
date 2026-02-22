@@ -1,3 +1,14 @@
+lancelog (0.3.3) unstable; urgency=low
+
+  * feat: export `__version__` in the public API
+  * refactor: allocate `DataSectionOptions` default once
+  * fix: broaden `sink` type hint in `setup_logging()`
+  * ci: switch pre-commit runner from `pre-commit` to `prek`
+  * chore: add `CLAUDE.md` with development guidance for Claude Code
+  * update SonarCube badges in README.md
+
+ -- Daniel Troeder <troeder@univention.de>  Sun, 22 Feb 2026 13:13:35 +0100
+
 lancelog (0.3.2) unstable; urgency=low
 
   * fix: bump logfmter to a version that fixes escaping

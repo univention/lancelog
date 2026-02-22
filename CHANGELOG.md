@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.3] - 2026-02-22
+
+- feat: export `__version__` in the public API
+- refactor: allocate `DataSectionOptions` default once
+- fix: broaden `sink` type hint in `setup_logging()`
+- ci: switch pre-commit runner from `pre-commit` to `prek`
+- chore: add `CLAUDE.md` with development guidance for Claude Code
+- update SonarCube badges in README.md
+
 ## [0.3.2] - 2025-11-28
 
 - fix: bump logfmter to a version that fixes escaping

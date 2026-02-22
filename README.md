@@ -2,8 +2,8 @@
 
 _A library that helps developers to set up logging in their applications in an easy and consistent way._
 
-[![Coverage](https://sonarqube.knut.univention.de/api/project_badges/measure?project=univention_dev_libraries_lancelog_2561d8ad-ee33-47fc-894f-3c90873c87a2&metric=coverage&token=sqb_c0ff2291588ac852e1463885c00ec2df0dba6200)](https://sonarqube.knut.univention.de/dashboard?id=univention_dev_libraries_lancelog_2561d8ad-ee33-47fc-894f-3c90873c87a2)
-[![Quality Gate Status](https://sonarqube.knut.univention.de/api/project_badges/measure?project=univention_dev_libraries_lancelog_2561d8ad-ee33-47fc-894f-3c90873c87a2&metric=alert_status&token=sqb_c0ff2291588ac852e1463885c00ec2df0dba6200)](https://sonarqube.knut.univention.de/dashboard?id=univention_dev_libraries_lancelog_2561d8ad-ee33-47fc-894f-3c90873c87a2)
+[![Coverage](https://sonarqube.knut.univention.de/api/project_badges/measure?project=univention_dev_libraries_lancelog_0c5cb975-55c2-432a-b96e-c1e4666648e5&metric=coverage&token=sqb_d3e918a57a60c02234647b3abcc9fe9e338e57c7)](https://sonarqube.knut.univention.de/dashboard?id=univention_dev_libraries_lancelog_0c5cb975-55c2-432a-b96e-c1e4666648e5)
+[![Quality Gate Status](https://sonarqube.knut.univention.de/api/project_badges/measure?project=univention_dev_libraries_lancelog_0c5cb975-55c2-432a-b96e-c1e4666648e5&metric=alert_status&token=sqb_d3e918a57a60c02234647b3abcc9fe9e338e57c7)](https://sonarqube.knut.univention.de/dashboard?id=univention_dev_libraries_lancelog_0c5cb975-55c2-432a-b96e-c1e4666648e5)
 [![Python version](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/)
 
 The [Loguru](https://loguru.readthedocs.io) and the Python logging libraries are set up
