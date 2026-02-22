@@ -1,7 +1,7 @@
 include:
   - project: univention/infrastructure/docker-services
     file:
-      - pre-commit.yml
+      - prek.yml
 
 variables:
   UV_VERSION: 0.6.6
@@ -31,9 +31,9 @@ prepare:
     reports:
       dotenv: .env
 
-run_pre_commit:
+pre_commit:
   stage: lint
-  extends: .pre-commit
+  extends: .prek
 
 test:
   stage: test
