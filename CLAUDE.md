@@ -72,7 +72,7 @@ The `_patching` function serializes the `extra` dict (populated via `logger.bind
 
 - **Structured logging**: message text and data fields are separate. Use `logger.bind(key=val).info("event")` or `with logger.contextualize(key=val): logger.info("event")` rather than interpolating data into the message string.
 - **Request IDs** are truncated to 10 characters when added via `DataSectionOptions`.
-- **`LOG_LEVEL_DEBUG_TO_TRACE`** is a `frozenset` of logger names whose `DEBUG` records are demoted to `TRACE`. Add library names there to suppress noisy libraries without silencing them entirely.
+- **`LOG_LEVEL_DEBUG_TO_TRACE`** is a `set` of logger names whose `DEBUG` records are demoted to `TRACE`. Add library names there to suppress noisy libraries without silencing them entirely.
 - Legacy format (`LOG_FORMAT_PRE_v030`) is preserved for backward compatibility but the ADR 0010 format is the default since v0.3.0.
 
 ## Code Style

@@ -155,7 +155,7 @@ def setup_logging(
         patcher=functools.partial(
             _patching,
             data_format=data_format,
-            data_options=data_options,
+            data_options=data_options or _DEFAULT_DATA_OPTIONS,
             fmt=record_fmt,
             request_id_func=request_id_func,
             syslog_prio_prefix=syslog_prio_prefix and not sink_is_tty,
@@ -191,7 +191,7 @@ def _log_level_to_syslog_priority(level: int) -> int:
 def _patching(
     record: loguru.Record,
     data_format: DataFormat,
-    data_options: DataSectionOptions | None,
+    data_options: DataSectionOptions,
     fmt: str,
     request_id_func: Callable[[], str] | None,
     syslog_prio_prefix: bool,
@@ -209,7 +209,6 @@ def _patching(
         record["message"] = record["message"].replace("\t| ", "\t\| ")  # noqa: W605
     if record["exception"] and all(record["exception"]):
         record["extra"]["_traceback"] = "".join(_exc_formatter.format_exception(*record["exception"]))
-    data_options = data_options or DataSectionOptions()
     request_id = request_id_func() if request_id_func else "-"
     if data_options.log_level:
         record["extra"]["log_level"] = record["level"].name
