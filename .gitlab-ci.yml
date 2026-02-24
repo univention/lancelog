@@ -13,7 +13,7 @@ variables:
   UV_LINK_MODE: copy
   DEBIAN_PACKAGE: lancelog
   DEBIAN_RELEASE: 5.2-0-0
-  DEBIAN_SCOPE: errata5.2-3
+  DEBIAN_SCOPE: errata5.2-4
 
 stages:
   - prepare
