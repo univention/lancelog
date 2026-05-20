@@ -1,6 +1,6 @@
 [project]
 name = "lancelog"
-version = "0.3.3"
+version = "0.3.4"
 description = "Setup logging like a hero."
 readme = "README.md"
 authors = [{ name = "Daniel Troeder", email = "troeder@univention.de" }]

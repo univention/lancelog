@@ -238,3 +238,27 @@ def test_request_id(capsys: CaptureFixture) -> None:
         raise AssertionError("Regex matching of log record failed.")  # pragma: nocover
     parsed = m.groupdict()
     assert parsed["request_id"] == "foo-bar-ba"
+
+
+def test_request_id_func_returns_none(capsys: CaptureFixture) -> None:
+    """A ``request_id_func`` that returns ``None`` must not crash; the field falls back to ``-``."""
+    setup_logging(sink=sys.stderr, request_id_func=lambda: None)  # type: ignore[arg-type, return-value]
+    logger.info("Hello")
+    captured = capsys.readouterr()
+    m = re.match(ADR0010_REGEX, captured.err)
+    if not m:
+        raise AssertionError("Regex matching of log record failed.")  # pragma: nocover
+    parsed = m.groupdict()
+    assert parsed["request_id"].strip() == "-"
+
+
+def test_request_id_func_returns_non_string(capsys: CaptureFixture) -> None:
+    """A ``request_id_func`` returning a non-string must not crash; the value is coerced to ``str``."""
+    setup_logging(sink=sys.stderr, request_id_func=lambda: 42)  # type: ignore[arg-type, return-value]
+    logger.info("Hello")
+    captured = capsys.readouterr()
+    m = re.match(ADR0010_REGEX, captured.err)
+    if not m:
+        raise AssertionError("Regex matching of log record failed.")  # pragma: nocover
+    parsed = m.groupdict()
+    assert parsed["request_id"].strip() == "42"

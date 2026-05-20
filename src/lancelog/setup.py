@@ -174,6 +174,22 @@ def setup_logging(
     )
 
 
+def _resolve_request_id(request_id_func: Callable[[], str] | None) -> str:
+    """
+    Resolve the request ID from ``request_id_func`` defensively.
+
+    Avoid crashing the logging path in case ``request_id_func`` returns a non-string.
+    ``None`` becomes ``"-"`` (matching the no-function default),
+    other values are coerced ``str``.
+    """
+    if request_id_func is None:
+        return "-"
+    value = request_id_func()
+    if value is None:
+        return "-"
+    return value if isinstance(value, str) else str(value)
+
+
 def _log_level_to_syslog_priority(level: int) -> int:
     """Convert Python log level to Syslog priority."""
     if level < 20:  # < logging.INFO -> Priority Debug
@@ -209,7 +225,7 @@ def _patching(
         record["message"] = record["message"].replace("\t| ", "\t\| ")  # noqa: W605
     if record["exception"] and all(record["exception"]):
         record["extra"]["_traceback"] = "".join(_exc_formatter.format_exception(*record["exception"]))
-    request_id = request_id_func() if request_id_func else "-"
+    request_id = _resolve_request_id(request_id_func)
     if data_options.log_level:
         record["extra"]["log_level"] = record["level"].name
     if data_options.request_id:
