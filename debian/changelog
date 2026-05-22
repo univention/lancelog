@@ -1,3 +1,10 @@
+lancelog (0.3.4) unstable; urgency=low
+
+  * fix: request_id_func returning non-string crashes logging with TypeError
+  * fix: DeprecationWarning: invalid escape sequence
+
+ -- Daniel Troeder <troeder@univention.de>  Fri, 22 May 2026 13:47:15 +0200
+
 lancelog (0.3.3) unstable; urgency=low
 
   * feat: export `__version__` in the public API

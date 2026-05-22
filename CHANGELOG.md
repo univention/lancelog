@@ -3,6 +3,7 @@
 ## [0.3.4] - 2026-05-20
 
 - fix: request_id_func returning non-string crashes logging with TypeError
+- fix: DeprecationWarning: invalid escape sequence
 
 ## [0.3.3] - 2026-02-22
 

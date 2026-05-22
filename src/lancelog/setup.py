@@ -222,7 +222,7 @@ def _patching(
     if "\n" in record["message"]:
         record["message"] = repr(record["message"])
     if "\t| " in record["message"]:
-        record["message"] = record["message"].replace("\t| ", "\t\| ")  # noqa: W605
+        record["message"] = record["message"].replace("\t| ", "\t\\| ")
     if record["exception"] and all(record["exception"]):
         record["extra"]["_traceback"] = "".join(_exc_formatter.format_exception(*record["exception"]))
     request_id = _resolve_request_id(request_id_func)
