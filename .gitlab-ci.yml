@@ -1,5 +1,7 @@
 include:
-  - component: $CI_SERVER_FQDN/univention/dev/tooling/ci-components/ai-review@2.8.0
+  - component: $CI_SERVER_FQDN/univention/dev/tooling/ci-components/ai-review@2.13.1
+    inputs:
+      clear_previous_comments: true
   - project: univention/infrastructure/docker-services
     file:
       - prek.yml
