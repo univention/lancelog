@@ -9,6 +9,7 @@ setup_logging()
 
 from __future__ import annotations
 
+import atexit
 import functools
 import importlib
 import inspect
@@ -17,11 +18,10 @@ import os
 import sys
 import threading
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from importlib.metadata import version
-from types import ModuleType
-from typing import Any, TextIO
+from typing import Any, Protocol, TextIO, cast
 
 import logfmter
 import loguru
@@ -94,9 +94,49 @@ class DataSectionOptions:
 _DEFAULT_DATA_OPTIONS = DataSectionOptions()
 
 
-def _import_otel() -> ModuleType:
+@dataclass
+class OtelOptions:
+    """Forward log records to an OpenTelemetry (OTLP/HTTP) endpoint, needs lancelog[otel]."""
+
+    level: int | str | LogLevel = LogLevel.INFO  # minimum severity to export, independent of stdout `level`
+    endpoint: str | None = None  # used verbatim incl. path; None: OTEL_EXPORTER_OTLP_[LOGS_]ENDPOINT
+    headers: dict[str, str] | None = field(default=None, repr=False)  # None: OTEL_EXPORTER_OTLP_[LOGS_]HEADERS
+    service_name: str | None = None  # None: OTEL_SERVICE_NAME
+    resource_attributes: dict[str, str] | None = None  # merged over OTEL_RESOURCE_ATTRIBUTES
+    timeout: float | None = None  # export timeout in seconds, None: OTEL_EXPORTER_OTLP_TIMEOUT / 10
+
+
+_otel_shutdown: Callable[[], None] | None = None
+_atexit_registered = False
+
+
+def _start_otlp_sink(options: OtelOptions, source_ref_key: str) -> None:
+    global _otel_shutdown, _atexit_registered
+    if not _atexit_registered:
+        atexit.register(_shutdown_otel)
+        _atexit_registered = True
+    _otel_shutdown = _import_otel().add_otlp_sink(options, source_ref_key)
+
+
+def _shutdown_otel() -> None:
+    """Flush and stop the OTLP sink, if any. Loguru's `logger.remove()` does not flush callable sinks."""
+    global _otel_shutdown
+    shutdown, _otel_shutdown = _otel_shutdown, None
+    if shutdown is not None:
+        shutdown()
+
+
+class _OtelModule(Protocol):
+    """The surface of `lancelog._otel` that this module uses, so the call sites stay typed without importing it."""
+
+    def add_otlp_sink(self, options: OtelOptions, source_ref_key: str) -> Callable[[], None]: ...
+
+    def trace_context(self) -> dict[str, str]: ...
+
+
+def _import_otel() -> _OtelModule:
     try:
-        return importlib.import_module("lancelog._otel")
+        return cast(_OtelModule, importlib.import_module("lancelog._otel"))
     except ImportError as exc:
         raise ImportError("OpenTelemetry support requires the 'otel' extra: pip install 'lancelog[otel]'") from exc
 
@@ -112,6 +152,7 @@ def setup_logging(
     enqueue: bool = False,
     request_id_func: Callable[[], str] | None = None,
     data_options: DataSectionOptions | None = None,
+    otel: OtelOptions | None = None,
 ) -> None:
     """
     Configure logging.
@@ -139,6 +180,8 @@ def setup_logging(
         If omitted, the request ID will be `-`.
     :param DataSectionOptions data_options: Optional values added to the data section of every log record.
         When writing JSON, values will be in to the `extra` field.
+    :param OtelOptions otel: Also export log records to an OpenTelemetry endpoint over OTLP/HTTP.
+        Requires `lancelog[otel]`. Pending records are flushed at exit and when `setup_logging` is called again.
     :return: None
     """
     effective_data_options = data_options or _DEFAULT_DATA_OPTIONS
@@ -161,6 +204,10 @@ def setup_logging(
         "enqueue": enqueue,
     }
     trace_context_func = _import_otel().trace_context if effective_data_options.trace_context else None
+    if otel is not None:  # fail before touching the current configuration
+        _import_otel()
+        logger.remove(logger.add(lambda _: None, level=getattr(otel.level, "value", otel.level)))
+    _shutdown_otel()
     logger.remove()
     logger.add(**kwargs)
     logger.configure(
@@ -172,8 +219,11 @@ def setup_logging(
             request_id_func=request_id_func,
             trace_context_func=trace_context_func,
             syslog_prio_prefix=syslog_prio_prefix and not sink_is_tty,
+            keep_raw_message=otel is not None,
         )
     )
+    if otel is not None:
+        _start_otlp_sink(otel, effective_data_options.source_ref_key)
     logging.basicConfig(handlers=[_InterceptHandler()], level=0, force=True)
     logger.debug(
         "Configured logging.",
@@ -183,6 +233,7 @@ def setup_logging(
         syslog_prio_prefix=syslog_prio_prefix,
         request_id_func=repr(request_id_func),
         data_options=repr(data_options),
+        otel=repr(otel),
         LOG_LEVEL_DEBUG_TO_TRACE=sorted(LOG_LEVEL_DEBUG_TO_TRACE),
     )
 
@@ -225,6 +276,7 @@ def _patching(
     request_id_func: Callable[[], str] | None,
     syslog_prio_prefix: bool,
     trace_context_func: Callable[[], dict[str, str]] | None,
+    keep_raw_message: bool,
 ) -> None:
     """
     Serialize log record to Logfmt or JSON, add optional data.
@@ -233,6 +285,8 @@ def _patching(
     if record["level"].name.startswith("Level "):
         # Unknown log level, check if Python logging knows it. It'll fall back to "Level <int>".
         record["level"].name = logging.getLevelName(record["level"].no).replace(" ", "")
+    if keep_raw_message:  # unescaped, for the OTLP body
+        record["raw_message"] = record["message"]
     if "\n" in record["message"]:
         record["message"] = repr(record["message"])
     if "\t| " in record["message"]:

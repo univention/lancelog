@@ -299,9 +299,9 @@ test = [
 requires-dist = [
     { name = "logfmter", specifier = ">=0.0.11" },
     { name = "loguru", specifier = ">=0.7.0" },
-    { name = "opentelemetry-api", marker = "extra == 'otel'", specifier = ">=1.40,<2" },
-    { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'otel'", specifier = ">=1.40,<2" },
-    { name = "opentelemetry-sdk", marker = "extra == 'otel'", specifier = ">=1.40,<2" },
+    { name = "opentelemetry-api", marker = "extra == 'otel'", specifier = ">=1.42,<2" },
+    { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'otel'", specifier = ">=1.42,<2" },
+    { name = "opentelemetry-sdk", marker = "extra == 'otel'", specifier = ">=1.42,<2" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=7" },
     { name = "pytest-cov", marker = "extra == 'test'", specifier = ">=4" },
     { name = "uvicorn", marker = "extra == 'test'", specifier = ">=0.17" },

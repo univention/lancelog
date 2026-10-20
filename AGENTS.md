@@ -42,11 +42,11 @@ and a new dependency needs a minimum that is not a bare name.
 
 ## Architecture
 
-The library is intentionally minimal: roughly 330 lines of core code in `setup.py`, plus about 250 lines for the optional uvicorn integration in `uvicorn_log.py`:
+The library is intentionally small: a few hundred lines of core code in `setup.py`, plus the optional uvicorn integration in `uvicorn_log.py` and the optional OpenTelemetry integration in `_otel.py`.
 
 ### `src/lancelog/setup.py`
 
-Contains the core logging setup:
+Contains the core: logging setup, the Loguru patcher, the standard `logging` interception, and the option types.
 
 - **`setup_logging()`** — the main public function. Configures Loguru (removes default handler, adds a new one with custom format/sink/level), installs `_InterceptHandler` on the root Python logger, and applies `_patching()` as a Loguru record patcher.
 
@@ -62,9 +62,22 @@ Contains the core logging setup:
 
 - **`uvicorn_log_config(health_paths=(), log_request_headers=False)`**: returns a `dictConfig` dict for `uvicorn.run(log_config=...)`. Requires `setup_logging()` to have run (raises `RuntimeError` otherwise) and logs its configuration at `DEBUG`. Makes the `uvicorn` loggers propagate to Lancelog and turns access records into structured records via `_UvicornAccessHandler`: status 500 or above is logged at `ERROR` on every path, paths in `health_paths` with status below 300 at `DEBUG`, everything else at `INFO`. The query string is logged in a separate `TRACE` record; `log_request_headers` (`False`, `True` for all headers as one JSON field, or an iterable of header names for one field each) adds the request headers to it. Lancelog does not depend on uvicorn.
 
+### `src/lancelog/_otel.py`
+
+Optional OpenTelemetry integration, imported lazily by `setup.py` only when `DataSectionOptions.trace_context` is set or `OtelOptions` is passed.
+It is the only module that imports from the OpenTelemetry logs SDK (unstable API)
+and from private OpenTelemetry names (`opentelemetry._logs`, `opentelemetry.context._SUPPRESS_INSTRUMENTATION_KEY`).
+These can change in any minor release, so check them when updating the OpenTelemetry packages.
+It provides `trace_context()` (IDs of the active span, read in the patcher) and `add_otlp_sink()` (a Loguru sink that exports through a private `LoggerProvider`).
+`OtelOptions` and the `atexit` shutdown live in `setup.py`.
+The packages come from the `otel` extra (`pip install lancelog[otel]`);
+the Debian package does not depend on them, so OpenTelemetry tests skip with `pytest.importorskip`,
+and `debian/rules` measures coverage only for the files listed in `debian/coveragerc`.
+See `docs/otel-example/` for a runnable demo.
+
 ### `src/lancelog/__init__.py`
 
-Public API surface: exports `setup_logging`, `logger`, `LogLevel`, `DataFormat`, `DataSectionOptions`, `LOG_FORMAT_DEFAULT`, `LOG_FORMAT_PRE_v030`, `LOG_LEVEL_DEBUG_TO_TRACE`, `uvicorn_log_config`.
+Public API surface: exports `setup_logging`, `logger`, `LogLevel`, `DataFormat`, `DataSectionOptions`, `OtelOptions`, `LOG_FORMAT_DEFAULT`, `LOG_FORMAT_PRE_v030`, `LOG_LEVEL_DEBUG_TO_TRACE`, `uvicorn_log_config`.
 
 ### Log Format
 

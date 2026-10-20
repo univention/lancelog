@@ -1,0 +1,5 @@
+services:
+  victorialogs:
+    image: victoriametrics/victoria-logs:v1.30.0
+    ports:
+      - "9428:9428"

@@ -14,6 +14,7 @@ from .setup import (
     DataSectionOptions,
     LOG_FORMAT_PRE_v030,
     LogLevel,
+    OtelOptions,
     setup_logging,
 )
 from .uvicorn_log import uvicorn_log_config
@@ -27,6 +28,7 @@ __all__ = [
     "DataFormat",
     "DataSectionOptions",
     "LogLevel",
+    "OtelOptions",
     "logger",
     "setup_logging",
     "uvicorn_log_config",

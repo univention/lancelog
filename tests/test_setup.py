@@ -8,8 +8,10 @@ import re
 import subprocess
 import sys
 import threading
+import types
+from collections.abc import Callable
 from importlib.metadata import version
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from _pytest.capture import CaptureFixture
@@ -19,6 +21,7 @@ from lancelog import (
     DataFormat,
     DataSectionOptions,
     LOG_FORMAT_PRE_v030,
+    OtelOptions,
     __version__,
     logger,
     setup_logging,
@@ -244,7 +247,7 @@ def test_request_id(capsys: CaptureFixture) -> None:
 
 def test_request_id_func_returns_none(capsys: CaptureFixture) -> None:
     """A ``request_id_func`` that returns ``None`` must not crash; the field falls back to ``-``."""
-    setup_logging(sink=sys.stderr, request_id_func=lambda: None)  # type: ignore[arg-type, return-value]
+    setup_logging(sink=sys.stderr, request_id_func=cast(Callable[[], str], lambda: None))
     logger.info("Hello")
     captured = capsys.readouterr()
     m = re.match(ADR0010_REGEX, captured.err)
@@ -256,7 +259,7 @@ def test_request_id_func_returns_none(capsys: CaptureFixture) -> None:
 
 def test_request_id_func_returns_non_string(capsys: CaptureFixture) -> None:
     """A ``request_id_func`` returning a non-string must not crash; the value is coerced to ``str``."""
-    setup_logging(sink=sys.stderr, request_id_func=lambda: 42)  # type: ignore[arg-type, return-value]
+    setup_logging(sink=sys.stderr, request_id_func=cast(Callable[[], str], lambda: 42))
     logger.info("Hello")
     captured = capsys.readouterr()
     m = re.match(ADR0010_REGEX, captured.err)
@@ -281,9 +284,32 @@ def test_no_opentelemetry_imported_without_otel_options() -> None:
     assert result.stdout.strip().splitlines()[-1] == "[]"
 
 
-@pytest.mark.parametrize("kwargs", [{"data_options": DataSectionOptions(trace_context=True)}])  # type: ignore
+@pytest.mark.parametrize("kwargs", [{"data_options": DataSectionOptions(trace_context=True)}, {"otel": OtelOptions()}])  # type: ignore
 def test_missing_extra_names_lancelog_otel(monkeypatch: pytest.MonkeyPatch, kwargs: dict[str, Any]) -> None:
     monkeypatch.setitem(sys.modules, "opentelemetry", None)
     monkeypatch.delitem(sys.modules, "lancelog._otel", raising=False)
     with pytest.raises(ImportError, match=r"lancelog\[otel\]"):
         setup_logging(**kwargs)
+
+
+def test_otel_hooks_with_stub_module(monkeypatch: pytest.MonkeyPatch, capsys: CaptureFixture) -> None:
+    # A stub instead of lancelog._otel, so this runs without OpenTelemetry (Debian build).
+    shutdown_calls = []
+    stub = types.ModuleType("lancelog._otel")
+    stub.trace_context = lambda: {"trace_id": "stubtrace"}  # type: ignore[attr-defined]
+    stub.add_otlp_sink = lambda options, source_ref_key: lambda: shutdown_calls.append(source_ref_key)  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "lancelog._otel", stub)
+
+    setup_logging(sink=sys.stdout, data_options=DataSectionOptions(trace_context=True), otel=OtelOptions())
+    logger.info("Hello")
+    assert "trace_id=stubtrace" in capsys.readouterr().out
+    setup_logging(sink=sys.stdout)
+    assert shutdown_calls == ["_source"]
+
+
+def test_no_raw_message_without_otel() -> None:
+    setup_logging(sink=sys.stdout)
+    records: list[Any] = []
+    logger.add(lambda message: records.append(message.record))
+    logger.info("Hello")
+    assert "raw_message" not in records[0]

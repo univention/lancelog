@@ -79,6 +79,7 @@ def setup_logging(
     enqueue: bool = False,
     request_id_func: Callable[[], str] = None,
     data_options: DataSectionOptions | None = None,
+    otel: OtelOptions | None = None,
 ) -> None:
     """
     Configure logging.
@@ -107,6 +108,8 @@ def setup_logging(
     :return: None
     :param DataSectionOptions data_options: Optional values added to the data section of every log record.
         When writing JSON, values will be in to the `extra` field.
+    :param OtelOptions otel: Also export log records to an OpenTelemetry endpoint over OTLP/HTTP.
+        Requires `lancelog[otel]`. Pending records are flushed at exit and when `setup_logging` is called again.
     """
 ```
 
@@ -164,6 +167,7 @@ class DataSectionOptions:
     timestamp: bool = False  # UNIX timestamp, value: float
     thread_id: bool = False  # value: int
     thread_name: bool = False  # value: str
+    trace_context: bool = False  # trace_id, span_id, trace_flags of the active span, needs lancelog[otel]
 ```
 
 By default, all options are deactivated (`source_ref_key` is set to the default).
@@ -525,6 +529,115 @@ Lancelog reads the span in the thread that logs, so the IDs are right even with 
 
 The flags value depends on the SDK version and the sampler.
 Recent SDK versions also set the "random trace ID" bit, so a sampled span has `03`.
+
+### Forwarding logs to OpenTelemetry (OTLP)
+
+Pass `OtelOptions` to `setup_logging()` to export log records to an OpenTelemetry endpoint over OTLP/HTTP (protobuf).
+The export is an additional sink next to the one configured by `sink` and `level`.
+It has its own minimum level.
+`setup_logging(filter=...)` applies only to the stdout or file sink.
+The OTLP sink filters by its own `level` and excludes the `opentelemetry*` loggers.
+Both features are independent:
+export works without `trace_context`, and `trace_context` works without export.
+
+```python
+from lancelog import DataFormat, OtelOptions, setup_logging
+
+setup_logging(
+    data_format=DataFormat.JSON,
+    level="INFO",  # stdout
+    otel=OtelOptions(
+        level="DEBUG",  # OTLP
+        endpoint="http://victorialogs:9428/insert/opentelemetry/v1/logs",
+        service_name="my-service",
+        resource_attributes={"deployment.environment": "staging"},
+    ),
+)
+```
+
+| `OtelOptions` field   | Default                      | Falls back to, when `None`                                   |
+| --------------------- | ---------------------------- | ------------------------------------------------------------ |
+| `level`               | `LogLevel.INFO`              | (no fallback) minimum level to export, independent of the stdout `level` |
+| `endpoint`            | `None`                       | `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`, then `OTEL_EXPORTER_OTLP_ENDPOINT` (with `/v1/logs` appended), then `http://localhost:4318/v1/logs`. An explicit `endpoint` is used verbatim, so include the path (for example `/v1/logs`) |
+| `headers`             | `None`                       | `OTEL_EXPORTER_OTLP_LOGS_HEADERS`, then `OTEL_EXPORTER_OTLP_HEADERS` |
+| `service_name`        | `None`                       | `OTEL_SERVICE_NAME`, then the SDK default `unknown_service`  |
+| `resource_attributes` | `None`                       | Merged over `OTEL_RESOURCE_ATTRIBUTES`                       |
+| `timeout`             | `None`                       | `OTEL_EXPORTER_OTLP_LOGS_TIMEOUT`, then `OTEL_EXPORTER_OTLP_TIMEOUT`, then 10 seconds |
+
+`headers` is left out of `repr()`, so authentication tokens do not appear in the debug record "Configured logging.".
+An invalid `level` raises `ValueError` from `setup_logging()` before it changes the current configuration.
+
+#### Exported record
+
+| OpenTelemetry field | Source                                                          |
+| ------------------- | --------------------------------------------------------------- |
+| body                | The message of the log record, without the data section         |
+| timestamp           | Time of the log record                                          |
+| severity            | See the table below; the Loguru level name is the severity text |
+| attributes          | The `extra` fields, see below                                   |
+| `code.file.path`, `code.function.name`, `code.line.number` | Source of the log call |
+| `exception.type`, `exception.message`, `exception.stacktrace` | The exception, if one is attached (for example by `logger.exception()`) |
+| trace context       | See below                                                       |
+
+| Loguru level | OpenTelemetry severity |
+| ------------ | ---------------------- |
+| `TRACE`      | `TRACE`                |
+| `DEBUG`      | `DEBUG`                |
+| `INFO`       | `INFO`                 |
+| `SUCCESS`    | `INFO2`                |
+| `WARNING`    | `WARN`                 |
+| `ERROR`      | `ERROR`                |
+| `CRITICAL`   | `FATAL`                |
+
+Custom levels map by their number: below 10 `TRACE`, below 20 `DEBUG`, below 30 `INFO`, below 40 `WARN`, below 50 `ERROR`, otherwise `FATAL`.
+
+Attributes come from the `extra` fields, for example from `logger.bind()` and `logger.contextualize()`.
+OpenTelemetry attributes accept only primitives and homogeneous sequences of primitives.
+Lancelog keeps `str`, `bool`, `int` and `float` values and lists or tuples whose items are all of the same primitive type.
+It converts every other value with `str()`.
+Fields with the value `None` are dropped.
+`request_id` is exported as an attribute: always with `DataFormat.JSON`, otherwise only with `DataSectionOptions(request_id=True)`.
+The internal fields `serialized` and `_traceback` and the source reference field (`_source` by default) are not exported as attributes.
+The fields `trace_id`, `span_id` and `trace_flags` become the trace context of the record when they hold valid hexadecimal IDs,
+and are exported as attributes otherwise.
+
+Trace context: the exported record carries the trace and span ID of the span that is active when the log call happens,
+whether or not `trace_context` is set.
+With `DataSectionOptions(trace_context=True)` the IDs also appear in the stdout or file output,
+and the export uses the IDs bound to the record.
+
+Log records of the loggers `opentelemetry*` are never exported.
+That includes the SDK's own error messages, which Lancelog receives through the redirected `logging` module.
+Records emitted while the SDK exports (in its export thread) are skipped too.
+Both exclusions prevent a feedback loop when the endpoint is unreachable.
+
+#### Provider and lifecycle
+
+Lancelog creates a private `LoggerProvider`.
+It does not set it as the global provider and does not reuse a global one.
+Calling `setup_logging()` again flushes and shuts down the previous provider before it creates a new one.
+An unreachable endpoint neither raises into the application nor blocks log calls.
+Records are exported in batches by a worker thread, which sends a batch after 1 second by default (`OTEL_BLRP_SCHEDULE_DELAY`).
+
+Pending records are flushed through an `atexit` hook when the interpreter exits normally.
+With an unreachable endpoint, this flush can delay the exit by up to the export timeout (`OtelOptions.timeout`, 10 seconds by default) per pending batch of 512 records, and by at most the SDK's 30 second shutdown timeout.
+The same applies when `setup_logging()` is called again.
+They are lost on `SIGKILL`.
+In a plain script, an unhandled `SIGTERM` terminates the process without running `atexit` hooks, so install a signal handler that raises `SystemExit`.
+Uvicorn handles `SIGTERM` and exits normally.
+
+#### Debian and UCS
+
+The `otel` extra applies to installations with `pip` or `uv`.
+OpenTelemetry Python is not packaged for UCS 5.2 or for Debian bookworm and trixie (it is in Debian forky and sid).
+The Debian package `python3-lancelog` does not depend on it,
+and without the OpenTelemetry packages `setup_logging()` works as before.
+Enabling `trace_context` or passing `otel` raises an `ImportError` that names the extra.
+
+#### Example
+
+[`docs/otel-example/`](docs/otel-example/README.md) contains a FastAPI application with OpenTelemetry tracing
+and a VictoriaLogs container that receives and displays its logs.
 
 ## Listener and UMC modules, UDM extensions (univention-debug)
 
