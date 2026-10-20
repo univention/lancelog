@@ -1,6 +1,6 @@
 [project]
 name = "lancelog"
-version = "0.4.0"
+version = "0.5.0"
 description = "Setup logging like a hero."
 readme = "README.md"
 authors = [{ name = "Daniel Troeder", email = "troeder@univention.de" }]
@@ -27,6 +27,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+otel = [
+    "opentelemetry-api>=1.40,<2",
+    "opentelemetry-sdk>=1.40,<2",
+    "opentelemetry-exporter-otlp-proto-http>=1.40,<2",
+]
 test = [
     "pytest>=7",
     "pytest-cov>=4",

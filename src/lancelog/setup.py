@@ -10,6 +10,7 @@ setup_logging()
 from __future__ import annotations
 
 import functools
+import importlib
 import inspect
 import logging
 import os
@@ -19,6 +20,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from importlib.metadata import version
+from types import ModuleType
 from typing import Any, TextIO
 
 import logfmter
@@ -86,9 +88,17 @@ class DataSectionOptions:
     timestamp: bool = False  # UNIX timestamp, value: float
     thread_id: bool = False  # value: int
     thread_name: bool = False  # value: str
+    trace_context: bool = False  # trace_id, span_id, trace_flags of the active span, needs lancelog[otel]
 
 
 _DEFAULT_DATA_OPTIONS = DataSectionOptions()
+
+
+def _import_otel() -> ModuleType:
+    try:
+        return importlib.import_module("lancelog._otel")
+    except ImportError as exc:
+        raise ImportError("OpenTelemetry support requires the 'otel' extra: pip install 'lancelog[otel]'") from exc
 
 
 def setup_logging(
@@ -131,6 +141,7 @@ def setup_logging(
         When writing JSON, values will be in to the `extra` field.
     :return: None
     """
+    effective_data_options = data_options or _DEFAULT_DATA_OPTIONS
     sink_is_tty = not isinstance(sink, str | os.PathLike) and sink.isatty()
     if data_format not in (DataFormat.JSON, DataFormat.LOGFMT):
         raise ValueError(f"Unsupported 'data_format' setting: {data_format!r}")
@@ -149,15 +160,17 @@ def setup_logging(
         "serialize": data_format == DataFormat.JSON,
         "enqueue": enqueue,
     }
+    trace_context_func = _import_otel().trace_context if effective_data_options.trace_context else None
     logger.remove()
     logger.add(**kwargs)
     logger.configure(
         patcher=functools.partial(
             _patching,
             data_format=data_format,
-            data_options=data_options or _DEFAULT_DATA_OPTIONS,
+            data_options=effective_data_options,
             fmt=record_fmt,
             request_id_func=request_id_func,
+            trace_context_func=trace_context_func,
             syslog_prio_prefix=syslog_prio_prefix and not sink_is_tty,
         )
     )
@@ -211,6 +224,7 @@ def _patching(
     fmt: str,
     request_id_func: Callable[[], str] | None,
     syslog_prio_prefix: bool,
+    trace_context_func: Callable[[], dict[str, str]] | None,
 ) -> None:
     """
     Serialize log record to Logfmt or JSON, add optional data.
@@ -240,6 +254,8 @@ def _patching(
         record["extra"]["thread_id"] = threading.current_thread().ident
     if data_options.thread_name:
         record["extra"]["thread_name"] = threading.current_thread().name
+    if trace_context_func is not None:
+        record["extra"].update(trace_context_func())
 
     if data_format == DataFormat.JSON:
         record["extra"]["request_id"] = request_id

@@ -487,6 +487,45 @@ Failures inside the handler do not fail the request being logged.
 The uvicorn command line (`--log-config`) is _not_ covered.
 Start the server with `uvicorn.run()` as shown above.
 
+### OpenTelemetry trace and span IDs
+
+Install the extra, which pulls in the OpenTelemetry packages (version 1.42 or later, below 2):
+
+```shell
+pip install 'lancelog[otel]' \
+  --index-url https://git.knut.univention.de/api/v4/projects/1449/packages/pypi/simple
+```
+
+Unless you enable an OpenTelemetry option, Lancelog never imports an `opentelemetry` module.
+
+Set `DataSectionOptions(trace_context=True)` to add the IDs of the active span to the data section
+(the `extra` field in JSON output) of every log record:
+
+| Field         | Value                                                                  |
+| ------------- | ---------------------------------------------------------------------- |
+| `trace_id`    | 32 lowercase hexadecimal characters                                    |
+| `span_id`     | 16 lowercase hexadecimal characters                                    |
+| `trace_flags` | 2 lowercase hexadecimal characters, for example `03` for a sampled span |
+
+The names follow the OpenTelemetry specification "Trace Context in non-OTLP Log Formats".
+When no valid span is active, the three fields are absent.
+Lancelog reads the span in the thread that logs, so the IDs are right even with `enqueue=True`.
+
+```python
+>>> from opentelemetry import trace
+>>> from opentelemetry.sdk.trace import TracerProvider
+>>> from lancelog import DataSectionOptions, setup_logging, logger
+>>> trace.set_tracer_provider(TracerProvider())
+>>> tracer = trace.get_tracer("example")
+>>> setup_logging(data_options=DataSectionOptions(trace_context=True))
+>>> with tracer.start_as_current_span("work"):
+...     logger.info("Hello")
+2026-10-20T10:00:00.000+02:00 INFO     [         -] Hello | trace_id=0af7651916cd43dd8448eb211c80319c span_id=b7ad6b7169203331 trace_flags=03 _source=<stdin>.<module>:2
+```
+
+The flags value depends on the SDK version and the sampler.
+Recent SDK versions also set the "random trace ID" bit, so a sampled span has `03`.
+
 ## Listener and UMC modules, UDM extensions (univention-debug)
 
 The Listener modules, UMC modules, UDM, and UDM extensions use "univention-debug" (UD) to write logs.

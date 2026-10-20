@@ -1,0 +1,11 @@
+# Exclude modules that require OpenTelemetry
+[run]
+include =
+    src/lancelog/__init__.py
+    src/lancelog/setup.py
+    src/lancelog/uvicorn_log.py
+    tests/conftest.py
+    tests/test_intercept_handler.py
+    tests/test_setup.py
+    tests/test_uvicorn_integration.py
+    tests/test_uvicorn_log.py

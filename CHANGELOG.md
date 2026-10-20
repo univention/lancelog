@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.5.0] - 2026-10-23
+
+- feat: add OpenTelemetry trace and span IDs to log records
+
 ## [0.4.0] - 2026-10-22
 
 - feat: add `uvicorn_log_config()` to route uvicorn's server

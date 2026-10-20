@@ -1,3 +1,9 @@
+lancelog (0.5.0) unstable; urgency=low
+
+  * feat: add OpenTelemetry trace and span IDs to log records
+
+ -- Daniel Troeder <troeder@univention.de>  Fri, 23 Oct 2026 16:12:00 +0200
+
 lancelog (0.4.0) unstable; urgency=low
 
   * feat: add `uvicorn_log_config()` to route uvicorn's server

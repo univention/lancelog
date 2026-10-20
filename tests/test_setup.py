@@ -5,9 +5,11 @@ import datetime
 import json
 import os
 import re
+import subprocess
 import sys
 import threading
 from importlib.metadata import version
+from typing import Any
 
 import pytest
 from _pytest.capture import CaptureFixture
@@ -262,3 +264,26 @@ def test_request_id_func_returns_non_string(capsys: CaptureFixture) -> None:
         raise AssertionError("Regex matching of log record failed.")  # pragma: nocover
     parsed = m.groupdict()
     assert parsed["request_id"].strip() == "42"
+
+
+def test_no_opentelemetry_imported_without_otel_options() -> None:
+    code = (
+        "import logging, sys\n"
+        "from lancelog import DataFormat, logger, setup_logging\n"
+        "setup_logging()\n"
+        "setup_logging(data_format=DataFormat.JSON)\n"
+        "logger.info('x')\n"
+        "logging.getLogger('x').warning('y')\n"
+        "print([m for m in sys.modules if m.startswith('opentelemetry')])\n"
+    )
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines()[-1] == "[]"
+
+
+@pytest.mark.parametrize("kwargs", [{"data_options": DataSectionOptions(trace_context=True)}])  # type: ignore
+def test_missing_extra_names_lancelog_otel(monkeypatch: pytest.MonkeyPatch, kwargs: dict[str, Any]) -> None:
+    monkeypatch.setitem(sys.modules, "opentelemetry", None)
+    monkeypatch.delitem(sys.modules, "lancelog._otel", raising=False)
+    with pytest.raises(ImportError, match=r"lancelog\[otel\]"):
+        setup_logging(**kwargs)
