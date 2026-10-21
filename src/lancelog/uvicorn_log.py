@@ -78,6 +78,15 @@ def _request_header_fields(frame: FrameType, names: Literal[True] | frozenset[st
     return fields
 
 
+def _client_fields(client_addr: str) -> dict[str, Any]:
+    if not client_addr:
+        return {}
+    address, _, port = client_addr.rpartition(":")
+    if port.isdecimal():
+        return {"client.address": address, "client.port": int(port)}
+    return {"client.address": client_addr}
+
+
 class _UvicornAccessHandler(logging.Handler):
     """Turn uvicorn access log records into structured Loguru records."""
 
@@ -92,57 +101,56 @@ class _UvicornAccessHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         try:
             depth = _stdlib_caller_depth()
-            level = _loguru_level(record)
             if not _is_access_args(record.args):
-                # If uvicorn changes the access record format/data model, a warning is logged once per process.
-                # The records are then logged as text with the field ``_access_record_error="unexpected arguments"``.
-                if not self._warned_unstructured:
-                    self._warned_unstructured = True
-                    logger.opt(depth=depth).warning(
-                        _UNSTRUCTURED_ACCESS_MESSAGE,
-                        logger_name=record.name,
-                        msg=_redacted_repr(record.msg),
-                        args=_arg_types(record.args),
-                    )
-                message = _format_message(record, depth, _arg_types, _redacted_repr)
-                if message is not None:
-                    logger.bind(_access_record_error="unexpected arguments").opt(
-                        depth=depth, exception=_exception_info(record)
-                    ).log(level, _QUERY_STRING.sub("", message))
+                self._emit_unstructured(record, depth + 1)
                 return
-
             client_addr, method, path_with_query, http_version, status_code = record.args
             path, _, query = path_with_query.partition("?")
-            fields: dict[str, Any] = {}
-            if client_addr:
-                address, _, port = client_addr.rpartition(":")
-                if port.isdecimal():
-                    fields["client.address"] = address
-                    fields["client.port"] = int(port)
-                else:
-                    fields["client.address"] = client_addr
+            fields: dict[str, Any] = _client_fields(client_addr)
             fields["http.request.method"] = method
             fields["url.path"] = path
             fields["network.protocol.version"] = http_version
             fields["http.response.status_code"] = status_code
-
-            if status_code >= 500:
-                level = "ERROR"
-            elif status_code < 300 and path in self.health_paths:
-                level = "DEBUG"
+            level = self._access_level(record, path, status_code)
             logger.opt(depth=depth, exception=_exception_info(record)).log(level, _ACCESS_LOG_MESSAGE, **fields)
-            if not _trace_enabled():
-                return
-            trace_fields: dict[str, Any] = {"url.path": path}
-            if query:
-                trace_fields["url.query"] = query
-            if self.log_request_headers:
-                trace_fields.update(_request_header_fields(sys._getframe(depth), self.log_request_headers))
-                logger.opt(depth=depth).trace(_ACCESS_LOG_HEADERS_MESSAGE, **trace_fields)
-            elif query:
-                logger.opt(depth=depth).trace(_ACCESS_LOG_QUERY_MESSAGE, **trace_fields)
+            if _trace_enabled():
+                self._emit_trace(depth + 1, path, query)
         except Exception:
             self.handleError(record)
+
+    def _emit_unstructured(self, record: logging.LogRecord, depth: int) -> None:
+        # If uvicorn changes the access record format/data model, a warning is logged once per process.
+        # The records are then logged as text with the field ``_access_record_error="unexpected arguments"``.
+        if not self._warned_unstructured:
+            self._warned_unstructured = True
+            logger.opt(depth=depth).warning(
+                _UNSTRUCTURED_ACCESS_MESSAGE,
+                logger_name=record.name,
+                msg=_redacted_repr(record.msg),
+                args=_arg_types(record.args),
+            )
+        message = _format_message(record, depth, _arg_types, _redacted_repr)
+        if message is not None:
+            logger.bind(_access_record_error="unexpected arguments").opt(
+                depth=depth, exception=_exception_info(record)
+            ).log(_loguru_level(record), _QUERY_STRING.sub("", message))
+
+    def _access_level(self, record: logging.LogRecord, path: str, status_code: int) -> str | int:
+        if status_code >= 500:
+            return "ERROR"
+        if status_code < 300 and path in self.health_paths:
+            return "DEBUG"
+        return _loguru_level(record)
+
+    def _emit_trace(self, depth: int, path: str, query: str) -> None:
+        trace_fields: dict[str, Any] = {"url.path": path}
+        if query:
+            trace_fields["url.query"] = query
+        if self.log_request_headers:
+            trace_fields.update(_request_header_fields(sys._getframe(depth), self.log_request_headers))
+            logger.opt(depth=depth).trace(_ACCESS_LOG_HEADERS_MESSAGE, **trace_fields)
+        elif query:
+            logger.opt(depth=depth).trace(_ACCESS_LOG_QUERY_MESSAGE, **trace_fields)
 
 
 def uvicorn_log_config(

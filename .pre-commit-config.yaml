@@ -20,6 +20,12 @@ repos:
       - id: ruff
         args: [ "--fix", "--unsafe-fixes", "--exit-non-zero-on-fix"]
       - id: ruff-format
+  - repo: https://github.com/rohaquinlop/complexipy-pre-commit
+    rev: v8.1.0
+    hooks:
+      - id: complexipy
+        types_or: [python, pyi]
+        args: ["--max-complexity-allowed", "15"]  # SonarQube's limit for cognitive complexity
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
     hooks:

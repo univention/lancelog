@@ -4,6 +4,7 @@
 
 - feat: add OpenTelemetry trace and span IDs to log records
 - feat: forward logs to an OpenTelemetry (OTLP) endpoint
+- refactor: reduce and limit cognitive complexity
 
 ## [0.4.0] - 2026-10-22
 

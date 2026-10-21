@@ -268,6 +268,24 @@ def _log_level_to_syslog_priority(level: int) -> int:
         return 2
 
 
+def _add_data_section_options(record: loguru.Record, data_options: DataSectionOptions, request_id: str) -> None:
+    """Add the optional fields enabled in ``data_options`` to the record's ``extra``."""
+    if data_options.log_level:
+        record["extra"]["log_level"] = record["level"].name
+    if data_options.request_id:
+        record["extra"]["request_id"] = request_id
+    if data_options.process_id:
+        record["extra"]["process_id"] = os.getpid()
+    if data_options.time:
+        record["extra"]["time"] = record["time"].isoformat()
+    if data_options.timestamp:
+        record["extra"]["timestamp"] = record["time"].timestamp()
+    if data_options.thread_id:
+        record["extra"]["thread_id"] = threading.current_thread().ident
+    if data_options.thread_name:
+        record["extra"]["thread_name"] = threading.current_thread().name
+
+
 def _patching(
     record: loguru.Record,
     data_format: DataFormat,
@@ -294,20 +312,7 @@ def _patching(
     if record["exception"] and all(record["exception"]):
         record["extra"]["_traceback"] = "".join(_exc_formatter.format_exception(*record["exception"]))
     request_id = _resolve_request_id(request_id_func)
-    if data_options.log_level:
-        record["extra"]["log_level"] = record["level"].name
-    if data_options.request_id:
-        record["extra"]["request_id"] = request_id
-    if data_options.process_id:
-        record["extra"]["process_id"] = os.getpid()
-    if data_options.time:
-        record["extra"]["time"] = record["time"].isoformat()
-    if data_options.timestamp:
-        record["extra"]["timestamp"] = record["time"].timestamp()
-    if data_options.thread_id:
-        record["extra"]["thread_id"] = threading.current_thread().ident
-    if data_options.thread_name:
-        record["extra"]["thread_name"] = threading.current_thread().name
+    _add_data_section_options(record, data_options, request_id)
     if trace_context_func is not None:
         record["extra"].update(trace_context_func())
 
