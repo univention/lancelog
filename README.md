@@ -375,6 +375,92 @@ logger.info("After.")
 When calling `logger.exception()` in an exception handler,
 traceback are both printed as multi-line text and added to data in field `_traceback`.
 
+### uvicorn and FastAPI
+
+`uvicorn.run()` applies uvicorn's default `LOGGING_CONFIG` when the server starts,
+after `setup_logging()` has run.
+That config gives the `uvicorn` and `uvicorn.access` loggers their own handlers
+and sets `propagate: False`,
+so their records bypass Lancelog.
+
+`uvicorn_log_config()` returns a replacement config.
+It requires that `setup_logging()` has run, otherwise it raises a `RuntimeError`.
+The `uvicorn` logger then propagates to Lancelog.
+The `uvicorn.access` logger gets a handler that writes structured records.
+Lancelog does not depend on uvicorn.
+
+```python
+# main.py
+
+import uvicorn
+from fastapi import FastAPI
+
+from lancelog import setup_logging, uvicorn_log_config
+
+setup_logging()
+
+app = FastAPI()
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.get("/users")
+def users() -> list[str]:
+    return []
+
+
+if __name__ == "__main__":
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=8000,
+        log_config=uvicorn_log_config(health_paths=["/health"]),
+    )
+```
+
+A request to `/users` is logged like this:
+
+```text
+2026-10-22T12:28:57.987+02:00 INFO     [         -] HTTP request. | client.address=127.0.0.1 client.port=45994 http.request.method=GET url.path=/users network.protocol.version=1.1 http.response.status_code=200 _source=h11_impl.send:477
+```
+
+The docstring of `uvicorn_log_config()` lists the fields of the access record.
+
+Access records are logged at `INFO`.
+Successful requests (status below 300) to the paths in `health_paths`
+are logged at `DEBUG`
+to keep Kubernetes probes out of the `INFO` output.
+Responses with status 500 or above are logged at `ERROR`, on every path.
+A health check that returns any other status (300 to 499) stays at `INFO`.
+
+`health_paths` is compared with the path as uvicorn logs it:
+percent-encoded and, since uvicorn 0.26, including `root_path`.
+Behind a prefix (`uvicorn.run(..., root_path="/api/v1")`)
+use `health_paths=["/api/v1/health"]`, not `["/health"]`.
+
+The `uvicorn` loggers stay at `INFO`, whatever level `setup_logging()` uses,
+to keep uvicorn's per-connection chatter out.
+To lower it, pass `log_level` to `uvicorn.run()`, for example `log_level="debug"`.
+`setup_logging(level=...)` must use the same level.
+
+The query string can contain secrets, so it is not part of the access record.
+It is logged in a separate record at level `TRACE`.
+That record reaches the sink only when Lancelog itself runs at `TRACE`:
+`setup_logging(level="TRACE")`.
+
+If uvicorn changes the access record,
+Lancelog logs the record as text at its own level,
+without the query string,
+with the field `_access_record_error`,
+and logs one `WARNING` per process that names the cause.
+Failures inside the handler do not fail the request being logged.
+
+The uvicorn command line (`--log-config`) is not covered.
+Start the server with `uvicorn.run()` as shown above.
+
 ## Listener and UMC modules, UDM extensions (univention-debug)
 
 The Listener modules, UMC modules, UDM, and UDM extensions use "univention-debug" (UD) to write logs.
@@ -455,4 +541,4 @@ uv sync --all-extras
 uv run pytest
 ```
 
-TODO: Write more test until 100% coverage.
+The test run fails below 100% coverage (`--cov-fail-under=100`).

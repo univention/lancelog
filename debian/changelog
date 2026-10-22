@@ -1,5 +1,11 @@
 lancelog (0.4.0) unstable; urgency=low
 
+  * feat: add `uvicorn_log_config()` to route uvicorn's server and access logs
+    through Lancelog as structured records
+    (univention/dev/libraries/lancelog#7).
+    Access records are logged at `ERROR` for status 500 or above,
+    at `DEBUG` for successful requests (status below 300) to `health_paths`, and at `INFO` otherwise.
+    It raises a `RuntimeError` if `setup_logging()` has not been called.
   * fix: strip trailing newlines from intercepted stdlib log messages.
     Such messages were rendered `repr()`-quoted and now render bare;
     update log pipeline rules that match the quoted form.

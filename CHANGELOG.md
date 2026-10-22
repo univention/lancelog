@@ -2,6 +2,12 @@
 
 ## [0.4.0] - 2026-10-22
 
+- feat: add `uvicorn_log_config()` to route uvicorn's server and access logs through Lancelog
+  as structured records
+  ([univention/dev/libraries/lancelog#7](https://git.knut.univention.de/univention/dev/libraries/lancelog/-/issues/7)).
+  Access records are logged at `ERROR` for status 500 or above,
+  at `DEBUG` for successful requests (status below 300) to `health_paths`, and at `INFO` otherwise.
+  It raises a `RuntimeError` if `setup_logging()` has not been called.
 - fix: strip trailing newlines from intercepted stdlib log messages.
   Such messages (for example uvicorn's `Exception in ASGI application\n`) were rendered `repr()`-quoted
   and now render bare; update log pipeline rules that match the quoted form.
