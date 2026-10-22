@@ -94,3 +94,34 @@ def test_handle_unknown_log_level(capsys: CaptureFixture) -> None:
     assert parsed2["record"]["message"] == "Hello infowarn json"
     assert parsed2["record"]["level"]["no"] == 25
     assert parsed2["record"]["level"]["name"] == "INFOWARN"
+
+
+def test_intercept_source_points_to_caller(capsys: CaptureFixture) -> None:
+    setup_logging(sink=sys.stderr)
+    logging.getLogger(__name__).info("Hello")
+    assert "_source=test_intercept_handler.test_intercept_source_points_to_caller:" in capsys.readouterr().err
+
+
+def _logged_message(capsys: CaptureFixture, message: str) -> str:
+    setup_logging(sink=sys.stderr)
+    logging.getLogger(__name__).info(message)
+    m = re.match(ADR0010_REGEX, capsys.readouterr().err)
+    if not m:
+        raise AssertionError("Regex matching of log record failed.")  # pragma: nocover
+    return m.groupdict()["message"]
+
+
+def test_intercept_strips_single_trailing_newline(capsys: CaptureFixture) -> None:
+    assert _logged_message(capsys, "Exception in app\n") == "Exception in app"
+
+
+def test_intercept_keeps_inner_newlines(capsys: CaptureFixture) -> None:
+    assert _logged_message(capsys, "a\nb\n") == repr("a\nb")
+
+
+def test_intercept_strips_multiple_trailing_newlines(capsys: CaptureFixture) -> None:
+    assert _logged_message(capsys, "a\n\n") == "a"
+
+
+def test_intercept_keeps_newline_only_message(capsys: CaptureFixture) -> None:
+    assert _logged_message(capsys, "\n") == repr("\n")
