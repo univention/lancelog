@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
+import io
 import json
 import logging
 import logging.config
 import re
 import subprocess
 import sys
+from collections.abc import Iterable
 from importlib.metadata import requires
 from typing import Any
 from unittest.mock import patch
@@ -13,20 +15,39 @@ from unittest.mock import patch
 import pytest
 from _pytest.capture import CaptureFixture
 
-from lancelog import DataFormat, LogLevel, setup_logging, uvicorn_log_config
+from lancelog import DataFormat, LogLevel, logger, setup_logging, uvicorn_log_config
 from lancelog.setup import ADR0010_REGEX, _InterceptHandler
+from lancelog.uvicorn_log import _request_header_fields, _trace_enabled
 
 
 ACCESS_FORMAT = '%s - "%s %s HTTP/%s" %d'
 
 
-def _setup(level: str | LogLevel = LogLevel.INFO, data_format: DataFormat = DataFormat.LOGFMT, **kwargs: Any) -> None:
+def _setup(
+    level: str | LogLevel = LogLevel.INFO,
+    data_format: DataFormat = DataFormat.LOGFMT,
+    log_request_headers: bool | Iterable[str] = False,
+    **kwargs: Any,
+) -> None:
     setup_logging(sink=sys.stderr, level=level, data_format=data_format, **kwargs)
-    logging.config.dictConfig(uvicorn_log_config(health_paths=["/health"]))
+    logging.config.dictConfig(uvicorn_log_config(health_paths=["/health"], log_request_headers=log_request_headers))
 
 
 def _access(client: str = "127.0.0.1:5000", path: str = "/items", status: int = 200) -> None:
     logging.getLogger("uvicorn.access").info(ACCESS_FORMAT, client, "GET", path, "1.1", status)
+
+
+class _RequestResponseCycle:
+    """Stands in for uvicorn's ``RequestResponseCycle``, whose ``send()`` writes the access record."""
+
+    def __init__(self, headers: list[tuple[Any, ...]]) -> None:
+        self.scope = {"type": "http", "headers": headers}
+
+    def send(self, path: str = "/items") -> None:
+        logging.getLogger("uvicorn.access").info(ACCESS_FORMAT, "127.0.0.1:5000", "GET", path, "1.1", 200)
+
+
+HEADERS = [(b"host", b"example.org"), (b"Accept", b"*/*"), (b"x-multi", b"a"), (b"x-multi", b"b")]
 
 
 def _parse(line: str) -> dict[str, str]:
@@ -370,15 +391,214 @@ def test_uvicorn_log_config_requires_setup_logging(handlers: list[logging.Handle
         root.handlers[:] = saved
 
 
-def test_emit_failure_does_not_propagate(capsys: CaptureFixture) -> None:
-    _setup()
+@pytest.mark.parametrize("value", ["host", None])  # type: ignore
+def test_log_request_headers_rejects_str_and_none(value: Any) -> None:
+    with pytest.raises(
+        TypeError, match="log_request_headers must be a bool or an iterable of header names, not a str or None"
+    ):
+        uvicorn_log_config(log_request_headers=value)
+
+
+def test_log_request_headers_names_are_normalized() -> None:
+    setup_logging(sink=sys.stderr)
+    config = uvicorn_log_config(log_request_headers=("Host", "X-Request-ID"))
+    assert config["handlers"]["lancelog_access"]["log_request_headers"] == frozenset({"host", "x-request-id"})
+    assert uvicorn_log_config(log_request_headers=True)["handlers"]["lancelog_access"]["log_request_headers"] is True
+
+
+def test_log_request_headers_defaults_to_false() -> None:
+    setup_logging(sink=sys.stderr)
+    assert uvicorn_log_config()["handlers"]["lancelog_access"]["log_request_headers"] is False
+
+
+def test_request_headers_and_query_logged_at_trace(capsys: CaptureFixture) -> None:
+    _setup(level="TRACE", log_request_headers=True)
     capsys.readouterr()
-    with patch("lancelog.uvicorn_log._loguru_level", side_effect=RuntimeError("boom")):
-        _access()
+    _RequestResponseCycle(HEADERS).send("/items?token=secret")
+    lines = capsys.readouterr().err.splitlines()
+    assert len(lines) == 2
+    info, trace = (_parse(line) for line in lines)
+    assert "http.request.header" not in info["data"]
+    assert trace["level"] == "TRACE"
+    assert trace["message"] == "HTTP request headers and query string."
+    for token in (
+        "url.path=/items",
+        "url.query=",
+        "token=secret",
+        'http.request.headers="{',
+        "_source=test_uvicorn_log.send:",
+    ):
+        assert token in trace["data"]
+    assert "http.request.header." not in trace["data"]
+
+
+def test_selected_request_headers_logged_at_trace(capsys: CaptureFixture) -> None:
+    _setup(level="TRACE", log_request_headers=["Host", "x-multi", "x-absent"])
+    capsys.readouterr()
+    _RequestResponseCycle(HEADERS).send("/items?token=secret")
+    lines = capsys.readouterr().err.splitlines()
+    assert len(lines) == 2
+    trace = _parse(lines[1])
+    assert trace["message"] == "HTTP request headers and query string."
+    for token in (
+        "http.request.header.host=example.org",
+        'http.request.header.x-multi="a, b"',
+        "url.query=",
+        "token=secret",
+        "_source=test_uvicorn_log.send:",
+    ):
+        assert token in trace["data"]
+    for token in ("http.request.header.accept", "x-absent", "http.request.headers=", "_request_headers_error"):
+        assert token not in trace["data"]
+
+
+def test_selected_request_headers_json(capsys: CaptureFixture) -> None:
+    _setup(level="TRACE", data_format=DataFormat.JSON, log_request_headers=["x-multi"])
+    capsys.readouterr()
+    _RequestResponseCycle(HEADERS).send("/items?a=1")
+    extra = json.loads(capsys.readouterr().err.splitlines()[1])["record"]["extra"]
+    assert extra["http.request.header.x-multi"] == "a, b"
+    assert "http.request.headers" not in extra
+
+
+def test_empty_request_header_list_logs_nothing(capsys: CaptureFixture) -> None:
+    _setup(level="TRACE", log_request_headers=[])
+    capsys.readouterr()
+    _RequestResponseCycle(HEADERS).send("/items?token=secret")
+    trace = _parse(capsys.readouterr().err.splitlines()[1])
+    assert trace["message"] == "HTTP request query string."
+    assert "http.request.header" not in trace["data"]
+
+
+def test_emit_failure_does_not_propagate(capsys: CaptureFixture) -> None:
+    _setup(level="TRACE", log_request_headers=True)
+    capsys.readouterr()
+    with patch("lancelog.uvicorn_log._request_header_fields", side_effect=RuntimeError("boom")):
+        _RequestResponseCycle(HEADERS).send()
     err = capsys.readouterr().err
+    assert _parse(err.splitlines()[0])["message"] == "HTTP request."
     assert "--- Logging error ---" in err
     assert "RuntimeError: boom" in err
-    assert "HTTP request." not in err
+    assert "HTTP request headers and query string." not in err
+
+
+def test_request_headers_logged_without_query(capsys: CaptureFixture) -> None:
+    _setup(level="TRACE", log_request_headers=True)
+    capsys.readouterr()
+    _RequestResponseCycle(HEADERS).send("/items")
+    trace = _parse(capsys.readouterr().err.splitlines()[1])
+    assert trace["message"] == "HTTP request headers and query string."
+    assert 'http.request.headers="{' in trace["data"]
+    assert "url.query" not in trace["data"]
+
+
+def test_request_headers_json(capsys: CaptureFixture) -> None:
+    _setup(level="TRACE", data_format=DataFormat.JSON, log_request_headers=True)
+    capsys.readouterr()
+    _RequestResponseCycle(HEADERS).send("/items?a=1")
+    extra = json.loads(capsys.readouterr().err.splitlines()[1])["record"]["extra"]
+    assert extra["url.query"] == "a=1"
+    assert json.loads(extra["http.request.headers"]) == {"host": "example.org", "accept": "*/*", "x-multi": "a, b"}
+    assert "http.request.header.host" not in extra
+    assert "_request_headers_error" not in extra
+
+
+def test_request_headers_logfmt_value_is_json(capsys: CaptureFixture) -> None:
+    _setup(level="TRACE", log_request_headers=True)
+    capsys.readouterr()
+    tricky = b'back\\slash "quoted"'
+    _RequestResponseCycle([*HEADERS, (b"x-tricky", tricky)]).send()
+    data = _parse(capsys.readouterr().err.splitlines()[1])["data"]
+    match = re.search(r'http\.request\.headers="((?:[^"\\]|\\.)*)"', data)
+    assert match
+    expected = {"host": "example.org", "accept": "*/*", "x-multi": "a, b", "x-tricky": tricky.decode()}
+    assert json.loads(re.sub(r"\\(.)", r"\1", match.group(1))) == expected
+
+
+def test_request_headers_not_logged_above_trace(capsys: CaptureFixture) -> None:
+    _setup(level="DEBUG", log_request_headers=True)
+    capsys.readouterr()
+    _RequestResponseCycle(HEADERS).send("/items?token=secret")
+    err = capsys.readouterr().err
+    assert len(err.splitlines()) == 1
+    assert "example.org" not in err
+    assert "secret" not in err
+
+
+def test_request_headers_not_logged_by_default(capsys: CaptureFixture) -> None:
+    _setup(level="TRACE")
+    capsys.readouterr()
+    _RequestResponseCycle(HEADERS).send("/items?token=secret")
+    trace = _parse(capsys.readouterr().err.splitlines()[1])
+    assert trace["message"] == "HTTP request query string."
+    assert "http.request.header" not in trace["data"]
+
+
+def test_request_headers_scope_missing(capsys: CaptureFixture) -> None:
+    _setup(level="TRACE", log_request_headers=True)
+    capsys.readouterr()
+    _access()
+    trace = _parse(capsys.readouterr().err.splitlines()[1])
+    assert trace["message"] == "HTTP request headers and query string."
+    assert '_request_headers_error="request scope not found"' in trace["data"]
+    assert "http.request.headers" not in trace["data"]
+    assert "url.path=/items" in trace["data"]
+
+
+@pytest.mark.parametrize("names", [True, ["x-test"]])  # type: ignore
+def test_request_headers_bad_entry_is_marked_and_rest_kept(capsys: CaptureFixture, names: bool | list[str]) -> None:
+    _setup(level="TRACE", data_format=DataFormat.JSON, log_request_headers=names)
+    capsys.readouterr()
+    _RequestResponseCycle([("host", "example.org"), (b"x-test", b"abc"), (b"bad",)]).send()
+    extra = json.loads(capsys.readouterr().err.splitlines()[1])["record"]["extra"]
+    assert extra["_request_headers_error"].startswith("AttributeError(")
+    if names is True:
+        assert json.loads(extra["http.request.headers"]) == {"x-test": "abc"}
+    else:
+        assert extra["http.request.header.x-test"] == "abc"
+
+
+def test_request_headers_scope_without_headers(capsys: CaptureFixture) -> None:
+    _setup(level="TRACE", data_format=DataFormat.JSON, log_request_headers=True)
+    capsys.readouterr()
+    cycle = _RequestResponseCycle([])
+    del cycle.scope["headers"]
+    cycle.send()
+    extra = json.loads(capsys.readouterr().err.splitlines()[1])["record"]["extra"]
+    assert extra["http.request.headers"] == "{}"
+
+
+def test_trace_enabled_follows_loguru_minimum_level() -> None:
+    setup_logging(sink=sys.stderr, level="INFO")
+    assert _trace_enabled() is False
+    setup_logging(sink=sys.stderr, level="TRACE")
+    assert _trace_enabled() is True
+    logger.remove()
+    assert _trace_enabled() is False
+    setup_logging(sink=sys.stderr, level="INFO")
+    logger.add(io.StringIO(), level="TRACE")
+    assert _trace_enabled() is True
+    setup_logging(sink=sys.stderr, level="INFO")
+
+
+@pytest.mark.parametrize("names", [True, ["host"]])  # type: ignore
+def test_request_headers_not_extracted_above_trace(capsys: CaptureFixture, names: bool | list[str]) -> None:
+    _setup(level="DEBUG", log_request_headers=names)
+    capsys.readouterr()
+    with patch("lancelog.uvicorn_log._request_header_fields", wraps=_request_header_fields) as spy:
+        _RequestResponseCycle(HEADERS).send("/items?token=secret")
+    err = capsys.readouterr().err
+    assert spy.call_count == 0
+    assert len(err.splitlines()) == 1
+    assert "example.org" not in err
+    assert "secret" not in err
+
+
+def test_request_headers_extracted_once_at_trace() -> None:
+    _setup(level="TRACE", log_request_headers=True)
+    with patch("lancelog.uvicorn_log._request_header_fields", wraps=_request_header_fields) as spy:
+        _RequestResponseCycle(HEADERS).send("/items?token=secret")
+    assert spy.call_count == 1
 
 
 def test_existing_loggers_are_not_disabled(capsys: CaptureFixture) -> None:
@@ -391,12 +611,22 @@ def test_existing_loggers_are_not_disabled(capsys: CaptureFixture) -> None:
 def test_uvicorn_log_config_logs_configuration(capsys: CaptureFixture) -> None:
     setup_logging(sink=sys.stderr, level="DEBUG")
     capsys.readouterr()
-    config = uvicorn_log_config(health_paths=iter(["/ready", "/health"]))
+    config = uvicorn_log_config(health_paths=iter(["/ready", "/health"]), log_request_headers=True)
     parsed = _parse(capsys.readouterr().err)
     assert parsed["level"] == "DEBUG"
     assert parsed["message"] == "Configured uvicorn logging."
     assert "health_paths=\"['/health', '/ready']\"" in parsed["data"]
+    assert "log_request_headers=true" in parsed["data"]
     assert config["handlers"]["lancelog_access"]["health_paths"] == frozenset({"/health", "/ready"})
+
+
+def test_uvicorn_log_config_logs_normalized_header_names(capsys: CaptureFixture) -> None:
+    setup_logging(sink=sys.stderr, level="DEBUG")
+    capsys.readouterr()
+    uvicorn_log_config(log_request_headers=iter(["X-Test", "Authorization"]))
+    data = _parse(capsys.readouterr().err)["data"]
+    assert "health_paths=[]" in data
+    assert "log_request_headers=\"['authorization', 'x-test']\"" in data
 
 
 @pytest.mark.parametrize(

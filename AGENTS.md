@@ -38,7 +38,7 @@ Tests require **100% coverage** (`--cov-fail-under=100`); any new code must be c
 
 ## Architecture
 
-The library is intentionally minimal: roughly 330 lines of core code in `setup.py`, plus about 160 lines for the optional uvicorn integration in `uvicorn_log.py`:
+The library is intentionally minimal: roughly 330 lines of core code in `setup.py`, plus about 250 lines for the optional uvicorn integration in `uvicorn_log.py`:
 
 ### `src/lancelog/setup.py`
 
@@ -56,7 +56,7 @@ Contains the core logging setup:
 
 ### `src/lancelog/uvicorn_log.py`
 
-- **`uvicorn_log_config(health_paths=())`**: returns a `dictConfig` dict for `uvicorn.run(log_config=...)`. Requires `setup_logging()` to have run (raises `RuntimeError` otherwise) and logs its configuration at `DEBUG`. Makes the `uvicorn` loggers propagate to Lancelog and turns access records into structured records via `_UvicornAccessHandler`: status 500 or above is logged at `ERROR` on every path, paths in `health_paths` with status below 300 at `DEBUG`, everything else at `INFO`. The query string is logged in a separate `TRACE` record. Lancelog does not depend on uvicorn.
+- **`uvicorn_log_config(health_paths=(), log_request_headers=False)`**: returns a `dictConfig` dict for `uvicorn.run(log_config=...)`. Requires `setup_logging()` to have run (raises `RuntimeError` otherwise) and logs its configuration at `DEBUG`. Makes the `uvicorn` loggers propagate to Lancelog and turns access records into structured records via `_UvicornAccessHandler`: status 500 or above is logged at `ERROR` on every path, paths in `health_paths` with status below 300 at `DEBUG`, everything else at `INFO`. The query string is logged in a separate `TRACE` record; `log_request_headers` (`False`, `True` for all headers as one JSON field, or an iterable of header names for one field each) adds the request headers to it. Lancelog does not depend on uvicorn.
 
 ### `src/lancelog/__init__.py`
 

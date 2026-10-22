@@ -451,6 +451,19 @@ It is logged in a separate record at level `TRACE`.
 That record reaches the sink only when Lancelog itself runs at `TRACE`:
 `setup_logging(level="TRACE")`.
 
+Request headers can contain credentials, such as the `Authorization` header.
+They are not logged by default.
+`log_request_headers` adds them to the `TRACE` record,
+which is then written for every request,
+with the message `HTTP request headers and query string.`:
+
+- `log_request_headers=True`: all headers in one JSON field, `http.request.headers`.
+- `log_request_headers=["user-agent", "x-forwarded-for"]`: one field per listed header,
+  for example `http.request.header.user-agent`.
+
+If uvicorn changes in a way that hides the headers from Lancelog,
+the record carries the field `_request_headers_error` with the reason.
+
 If uvicorn changes the access record,
 Lancelog logs the record as text at its own level,
 without the query string,

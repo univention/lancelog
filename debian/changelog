@@ -6,6 +6,8 @@ lancelog (0.4.0) unstable; urgency=low
     Access records are logged at `ERROR` for status 500 or above,
     at `DEBUG` for successful requests (status below 300) to `health_paths`, and at `INFO` otherwise.
     It raises a `RuntimeError` if `setup_logging()` has not been called.
+  * feat: `uvicorn_log_config(log_request_headers=...)` optionally logs all request headers
+    (one JSON field) or selected ones (one field each) at `TRACE`
   * fix: strip trailing newlines from intercepted stdlib log messages.
     Such messages were rendered `repr()`-quoted and now render bare;
     update log pipeline rules that match the quoted form.
