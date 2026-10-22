@@ -7,6 +7,8 @@
   and now render bare; update log pipeline rules that match the quoted form.
 - fix: log a stdlib record whose message cannot be formatted as `WARNING` `Could not format log record.`
   instead of raising into the application
+- fix: `_InterceptHandler` reports logging failures through `handleError()` instead of raising into the application,
+  and `exc_info=True` outside an `except` block no longer appends `NoneType: None`
 
 ## [0.3.4] - 2026-05-20
 
