@@ -267,6 +267,25 @@ def _stdlib_caller_depth() -> int:
     return depth
 
 
+def _format_message(record: logging.LogRecord, depth: int) -> str | None:
+    """
+    Return the message of ``record`` without trailing newlines.
+    A message that consists only of newlines is returned unchanged.
+
+    If ``msg % args`` fails, log one ``WARNING`` per record with the fields ``msg``, ``args`` and ``error`` instead
+    and return ``None``.
+    ``depth`` is the ``logger.opt(depth=...)`` value of the caller.
+    """
+    try:
+        message = record.getMessage()
+    except Exception as exc:
+        logger.opt(depth=depth + 1, exception=record.exc_info).warning(
+            "Could not format log record.", msg=repr(record.msg), args=repr(record.args), error=repr(exc)
+        )
+        return None
+    return message.rstrip("\n") or message
+
+
 class _InterceptHandler(logging.Handler):
     """
     Redirect standard Python logging to Loguru.
@@ -275,6 +294,8 @@ class _InterceptHandler(logging.Handler):
     and added code to move logs from debug to trace.
 
     Trailing newlines are stripped from the message, unless it consists only of newlines.
+    A record whose message cannot be formatted is logged as ``WARNING`` ``Could not format log record.``
+    with the fields ``msg``, ``args`` and ``error``.
     """
 
     def emit(self, record: logging.LogRecord) -> None:
@@ -290,5 +311,6 @@ class _InterceptHandler(logging.Handler):
             level = "TRACE"
 
         depth = _stdlib_caller_depth()
-        message = record.getMessage()
-        logger.opt(depth=depth, exception=record.exc_info).log(level, message.rstrip("\n") or message)
+        message = _format_message(record, depth)
+        if message is not None:
+            logger.opt(depth=depth, exception=record.exc_info).log(level, message)

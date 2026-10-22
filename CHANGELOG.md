@@ -5,6 +5,8 @@
 - fix: strip trailing newlines from intercepted stdlib log messages.
   Such messages (for example uvicorn's `Exception in ASGI application\n`) were rendered `repr()`-quoted
   and now render bare; update log pipeline rules that match the quoted form.
+- fix: log a stdlib record whose message cannot be formatted as `WARNING` `Could not format log record.`
+  instead of raising into the application
 
 ## [0.3.4] - 2026-05-20
 

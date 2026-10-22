@@ -119,6 +119,36 @@ def test_intercept_keeps_inner_newlines(capsys: CaptureFixture) -> None:
     assert _logged_message(capsys, "a\nb\n") == repr("a\nb")
 
 
+def test_unformattable_stdlib_record_logged_as_warning(capsys: CaptureFixture) -> None:
+    setup_logging(sink=sys.stderr)
+    logging.getLogger(__name__).info("%d", "x")
+    err = capsys.readouterr().err
+    m = re.match(ADR0010_REGEX, err)
+    if not m:
+        raise AssertionError("Regex matching of log record failed.")  # pragma: nocover
+    parsed = m.groupdict()
+    assert parsed["level"] == "WARNING"
+    assert parsed["message"] == "Could not format log record."
+    for token in (
+        "msg='%d'",
+        "args=('x',)",
+        'error="TypeError(',
+        "_source=test_intercept_handler.test_unformattable_stdlib_record_logged_as_warning:",
+    ):
+        assert token in parsed["data"]
+    assert "Logging error" not in err
+
+
+def test_unformattable_stdlib_record_keeps_traceback(capsys: CaptureFixture) -> None:
+    setup_logging(sink=sys.stderr, data_format=DataFormat.JSON)
+    try:
+        raise ZeroDivisionError("zero")
+    except ZeroDivisionError:
+        logging.getLogger(__name__).exception("%d", "x")
+    extra = json.loads(capsys.readouterr().err)["record"]["extra"]
+    assert "ZeroDivisionError" in extra["_traceback"]
+
+
 def test_intercept_strips_multiple_trailing_newlines(capsys: CaptureFixture) -> None:
     assert _logged_message(capsys, "a\n\n") == "a"
 

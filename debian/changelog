@@ -3,6 +3,8 @@ lancelog (0.4.0) unstable; urgency=low
   * fix: strip trailing newlines from intercepted stdlib log messages.
     Such messages were rendered `repr()`-quoted and now render bare;
     update log pipeline rules that match the quoted form.
+  * fix: log a stdlib record whose message cannot be formatted as `WARNING`
+    `Could not format log record.` instead of raising into the application
 
  -- Daniel Troeder <troeder@univention.de>  Thu, 22 Oct 2026 12:28:03 +0200
 
