@@ -17,6 +17,7 @@
   instead of raising into the application
 - fix: `_InterceptHandler` reports logging failures through `handleError()` instead of raising into the application,
   and `exc_info=True` outside an `except` block no longer appends `NoneType: None`
+- build: add `python3-uvicorn (>= 0.17)` to the Debian build dependencies
 
 ## [0.3.4] - 2026-05-20
 
