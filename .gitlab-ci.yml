@@ -60,6 +60,16 @@ test:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
     - if: $CI_COMMIT_BRANCH == 'main'
 
+test_dependency_floor:
+  # `test` runs on the newest versions in uv.lock.
+  # This job installs the lowest versions pyproject.toml allows for every dependency,
+  # so the declared minimums stay true (uvicorn 0.17 is Debian bookworm's, pytest-cov 4 is UCS 5.2's).
+  # --no-sync keeps `uv run` from re-resolving to the newest versions.
+  extends: test
+  script:
+    - uv sync --all-extras --resolution lowest-direct
+    - uv run --no-sync pytest
+
 sonarqube-scan:
   stage: sonarqube
   needs:

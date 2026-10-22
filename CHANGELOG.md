@@ -18,6 +18,7 @@
 - fix: `_InterceptHandler` reports logging failures through `handleError()` instead of raising into the application,
   and `exc_info=True` outside an `except` block no longer appends `NoneType: None`
 - test: add uvicorn as a test dependency and run it end to end
+- ci: run the tests against the lowest supported versions of all dependencies
 - build: add `python3-uvicorn (>= 0.17)` to the Debian build dependencies
 
 ## [0.3.4] - 2026-05-20
