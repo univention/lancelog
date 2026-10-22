@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.0] - 2026-10-22
+
+- fix: strip trailing newlines from intercepted stdlib log messages.
+  Such messages (for example uvicorn's `Exception in ASGI application\n`) were rendered `repr()`-quoted
+  and now render bare; update log pipeline rules that match the quoted form.
+
 ## [0.3.4] - 2026-05-20
 
 - fix: request_id_func returning non-string crashes logging with TypeError

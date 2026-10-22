@@ -251,12 +251,30 @@ def _patching(
     record["_syslog_prio"] = f"<{_log_level_to_syslog_priority(record['level'].no)}>" if syslog_prio_prefix else ""
 
 
+def _stdlib_caller_depth() -> int:
+    """
+    Return the ``logger.opt(depth=...)`` value, to be used inside a ``logging.Handler.emit()``,
+    that attributes the record to the code that called the stdlib logger.
+
+    The caller must call ``logger.opt(depth=...)`` from the same frame that called this helper.
+    A wrapper function in between shifts the reported source.
+    """
+    frame, depth = inspect.currentframe(), 0
+    frame = frame.f_back if frame else None
+    while frame and (depth == 0 or frame.f_code.co_filename == logging.__file__):
+        frame = frame.f_back
+        depth += 1
+    return depth
+
+
 class _InterceptHandler(logging.Handler):
     """
     Redirect standard Python logging to Loguru.
 
     Copied from https://loguru.readthedocs.io/en/stable/overview.html#entirely-compatible-with-standard-logging
     and added code to move logs from debug to trace.
+
+    Trailing newlines are stripped from the message, unless it consists only of newlines.
     """
 
     def emit(self, record: logging.LogRecord) -> None:
@@ -271,10 +289,6 @@ class _InterceptHandler(logging.Handler):
         if record.levelname == "DEBUG" and record.name in LOG_LEVEL_DEBUG_TO_TRACE:
             level = "TRACE"
 
-        # Find caller from where originated the logged message.
-        frame, depth = inspect.currentframe(), 0
-        while frame and (depth == 0 or frame.f_code.co_filename == logging.__file__):
-            frame = frame.f_back
-            depth += 1
-
-        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
+        depth = _stdlib_caller_depth()
+        message = record.getMessage()
+        logger.opt(depth=depth, exception=record.exc_info).log(level, message.rstrip("\n") or message)
