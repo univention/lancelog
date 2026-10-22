@@ -11,6 +11,7 @@
 - fix: `_InterceptHandler` reports logging failures through `handleError()`
   instead of raising into the application
 - test: add uvicorn integration tests
+- ci: add test job for the lowest supported dependency versions
 - build: add `python3-uvicorn` to the Debian build dependencies
 
 ## [0.3.4] - 2026-05-20

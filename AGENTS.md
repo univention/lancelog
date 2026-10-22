@@ -36,6 +36,10 @@ prek run --all-files
 
 Tests require **100% coverage** (`--cov-fail-under=100`); any new code must be covered.
 
+The minimum versions in `pyproject.toml` and the `test_dependency_floor` CI job must be kept in sync.
+The job installs the minimums with `--resolution lowest-direct`, so a minimum that no longer works there must be raised in `pyproject.toml`,
+and a new dependency needs a minimum that is not a bare name.
+
 ## Architecture
 
 The library is intentionally minimal: roughly 330 lines of core code in `setup.py`, plus about 250 lines for the optional uvicorn integration in `uvicorn_log.py`:

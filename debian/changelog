@@ -9,6 +9,7 @@ lancelog (0.4.0) unstable; urgency=low
   * fix: `_InterceptHandler` reports logging failures through `handleError()`
     instead of raising into the application
   * test: add uvicorn integration tests
+  * ci: add test job for the lowest supported dependency versions
   * build: add `python3-uvicorn` to the Debian build dependencies
 
  -- Daniel Troeder <troeder@univention.de>  Thu, 22 Oct 2026 12:28:03 +0200
