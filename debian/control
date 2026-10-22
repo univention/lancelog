@@ -13,6 +13,7 @@ Build-Depends:
  python3-pytest,
  python3-pytest-cov,
  python3-setuptools,
+ python3-uvicorn (>= 0.17),
 Standards-Version: 3.5.2
 
 Package: python3-lancelog
