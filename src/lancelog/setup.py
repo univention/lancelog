@@ -19,7 +19,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from importlib.metadata import version
-from typing import TextIO
+from typing import Any, TextIO
 
 import logfmter
 import loguru
@@ -267,6 +267,21 @@ def _stdlib_caller_depth() -> int:
     return depth
 
 
+def _loguru_level(record: logging.LogRecord) -> str | int:
+    """Return the Loguru level name for ``record``, or its number if Loguru does not know the level."""
+    level: str | int
+    try:
+        level = logger.level(record.levelname).name
+    except ValueError:
+        level = record.levelno
+    return level
+
+
+def _exception_info(record: logging.LogRecord) -> Any:
+    """Return ``record.exc_info``, or ``None`` for ``(None, None, None)`` (``exc_info=True`` outside ``except``)."""
+    return record.exc_info if record.exc_info and record.exc_info[0] else None
+
+
 def _format_message(record: logging.LogRecord, depth: int) -> str | None:
     """
     Return the message of ``record`` without trailing newlines.
@@ -279,7 +294,7 @@ def _format_message(record: logging.LogRecord, depth: int) -> str | None:
     try:
         message = record.getMessage()
     except Exception as exc:
-        logger.opt(depth=depth + 1, exception=record.exc_info).warning(
+        logger.opt(depth=depth + 1, exception=_exception_info(record)).warning(
             "Could not format log record.", msg=repr(record.msg), args=repr(record.args), error=repr(exc)
         )
         return None
@@ -295,18 +310,16 @@ class _InterceptHandler(logging.Handler):
     """
 
     def emit(self, record: logging.LogRecord) -> None:
-        # Get corresponding Loguru level if it exists.
-        level: str | int
         try:
-            level = logger.level(record.levelname).name
-        except ValueError:
-            level = record.levelno
+            level = _loguru_level(record)
 
-        # Move logs from debug to trace.
-        if record.levelname == "DEBUG" and record.name in LOG_LEVEL_DEBUG_TO_TRACE:
-            level = "TRACE"
+            # Move logs from debug to trace.
+            if record.levelname == "DEBUG" and record.name in LOG_LEVEL_DEBUG_TO_TRACE:
+                level = "TRACE"
 
-        depth = _stdlib_caller_depth()
-        message = _format_message(record, depth)
-        if message is not None:
-            logger.opt(depth=depth, exception=record.exc_info).log(level, message)
+            depth = _stdlib_caller_depth()
+            message = _format_message(record, depth)
+            if message is not None:
+                logger.opt(depth=depth, exception=_exception_info(record)).log(level, message)
+        except Exception:
+            self.handleError(record)

@@ -6,6 +6,7 @@ import re
 import sys
 from collections.abc import Callable, Generator
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 from _pytest.capture import CaptureFixture
@@ -117,6 +118,15 @@ def test_intercept_strips_single_trailing_newline(capsys: CaptureFixture) -> Non
 
 def test_intercept_keeps_inner_newlines(capsys: CaptureFixture) -> None:
     assert _logged_message(capsys, "a\nb\n") == repr("a\nb")
+
+
+def test_intercept_emit_failure_does_not_propagate(capsys: CaptureFixture) -> None:
+    setup_logging(sink=sys.stderr)
+    with patch("lancelog.setup._loguru_level", side_effect=RuntimeError("boom")):
+        logging.getLogger(__name__).info("Hello")
+    err = capsys.readouterr().err
+    assert "--- Logging error ---" in err
+    assert "RuntimeError: boom" in err
 
 
 def test_unformattable_stdlib_record_logged_as_warning(capsys: CaptureFixture) -> None:

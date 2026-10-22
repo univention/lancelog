@@ -5,6 +5,8 @@
 - fix: strip trailing newlines from intercepted stdlib log messages
 - fix: log a stdlib record whose message cannot be formatted as `WARNING`
   instead of raising into the application
+- fix: `_InterceptHandler` reports logging failures through `handleError()`
+  instead of raising into the application
 
 ## [0.3.4] - 2026-05-20
 

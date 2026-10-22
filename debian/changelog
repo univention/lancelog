@@ -3,6 +3,8 @@ lancelog (0.4.0) unstable; urgency=low
   * fix: strip trailing newlines from intercepted stdlib log messages
   * fix: log a stdlib record whose message cannot be formatted as `WARNING`
     instead of raising into the application
+  * fix: `_InterceptHandler` reports logging failures through `handleError()`
+    instead of raising into the application
 
  -- Daniel Troeder <troeder@univention.de>  Thu, 22 Oct 2026 12:28:03 +0200
 
