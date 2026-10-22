@@ -16,6 +16,7 @@ from .setup import (
     LogLevel,
     setup_logging,
 )
+from .uvicorn_log import uvicorn_log_config
 
 
 __all__ = [
@@ -28,4 +29,5 @@ __all__ = [
     "LogLevel",
     "logger",
     "setup_logging",
+    "uvicorn_log_config",
 ]

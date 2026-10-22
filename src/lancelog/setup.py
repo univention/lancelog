@@ -282,20 +282,26 @@ def _exception_info(record: logging.LogRecord) -> Any:
     return record.exc_info if record.exc_info and record.exc_info[0] else None
 
 
-def _format_message(record: logging.LogRecord, depth: int) -> str | None:
+def _format_message(
+    record: logging.LogRecord,
+    depth: int,
+    args_repr: Callable[[Any], str] = repr,
+    msg_repr: Callable[[Any], str] = repr,
+) -> str | None:
     """
     Return the message of ``record`` without trailing newlines.
     A message that consists only of newlines is returned unchanged.
 
     If ``msg % args`` fails, log one ``WARNING`` per record with the fields ``msg``, ``args`` and ``error`` instead
     and return ``None``.
-    ``depth`` is the ``logger.opt(depth=...)`` value of the caller.
+    ``depth`` is the ``logger.opt(depth=...)`` value of the caller, ``args_repr`` renders ``record.args``
+    and ``msg_repr`` renders ``record.msg``.
     """
     try:
         message = record.getMessage()
     except Exception as exc:
         logger.opt(depth=depth + 1, exception=_exception_info(record)).warning(
-            "Could not format log record.", msg=repr(record.msg), args=repr(record.args), error=repr(exc)
+            "Could not format log record.", msg=msg_repr(record.msg), args=args_repr(record.args), error=repr(exc)
         )
         return None
     return message.rstrip("\n") or message

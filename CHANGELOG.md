@@ -2,6 +2,8 @@
 
 ## [0.4.0] - 2026-10-22
 
+- feat: add `uvicorn_log_config()` to route uvicorn's server
+  and access logs through Lancelog as structured records
 - fix: strip trailing newlines from intercepted stdlib log messages
 - fix: log a stdlib record whose message cannot be formatted as `WARNING`
   instead of raising into the application
