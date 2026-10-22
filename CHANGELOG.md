@@ -10,6 +10,7 @@
   instead of raising into the application
 - fix: `_InterceptHandler` reports logging failures through `handleError()`
   instead of raising into the application
+- test: add uvicorn integration tests
 - build: add `python3-uvicorn` to the Debian build dependencies
 
 ## [0.3.4] - 2026-05-20
