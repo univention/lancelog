@@ -4,6 +4,7 @@
 
 - feat: add `uvicorn_log_config()` to route uvicorn's server
   and access logs through Lancelog as structured records
+- feat: `uvicorn_log_config` optionally logs request headers
 - fix: strip trailing newlines from intercepted stdlib log messages
 - fix: log a stdlib record whose message cannot be formatted as `WARNING`
   instead of raising into the application

@@ -4,10 +4,13 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
-from collections.abc import Iterable
-from typing import Any, TypeGuard
+import sys
+from collections.abc import Iterable, Mapping
+from types import FrameType
+from typing import Any, Literal, TypeGuard
 
 from loguru import logger
 
@@ -16,8 +19,14 @@ from .setup import _InterceptHandler, _exception_info, _format_message, _loguru_
 
 _ACCESS_LOG_MESSAGE = "HTTP request."
 _ACCESS_LOG_QUERY_MESSAGE = "HTTP request query string."
+_ACCESS_LOG_HEADERS_MESSAGE = "HTTP request headers and query string."
 _UNSTRUCTURED_ACCESS_MESSAGE = "Unexpected uvicorn access record, logging it unstructured."
 _QUERY_STRING = re.compile(r"\?\S*")
+_HEADERS_FIELD = "http.request.headers"
+_HEADER_FIELD_PREFIX = "http.request.header."
+_HEADERS_ERROR_FIELD = "_request_headers_error"
+_NO_SCOPE = "request scope not found"
+_TRACE_NO = logger.level("TRACE").no
 
 
 def _is_access_args(args: Any) -> TypeGuard[tuple[str, str, str, str, int]]:
@@ -39,12 +48,45 @@ def _redacted_repr(value: Any) -> str:
     return _QUERY_STRING.sub("", repr(value))
 
 
+def _trace_enabled() -> bool:
+    """Mirror the early return of Loguru's ``Logger._log()``; ``_core.min_level`` is private API."""
+    return bool(logger._core.min_level <= _TRACE_NO)
+
+
+def _request_header_fields(frame: FrameType, names: Literal[True] | frozenset[str]) -> dict[str, str]:
+    """Read the request headers from the ``scope`` of the uvicorn ``RequestResponseCycle`` that logged the record."""
+    scope = getattr(frame.f_locals.get("self"), "scope", None)
+    if not isinstance(scope, Mapping):
+        return {_HEADERS_ERROR_FIELD: _NO_SCOPE}
+    headers: dict[str, list[str]] = {}
+    fields: dict[str, str] = {}
+    for entry in scope.get("headers", ()):
+        try:
+            name, value = entry
+            key = name.decode("latin-1").lower()
+            text = value.decode("latin-1")
+        except (AttributeError, TypeError, ValueError) as exc:
+            fields.setdefault(_HEADERS_ERROR_FIELD, repr(exc))
+            continue
+        if names is True or key in names:
+            headers.setdefault(key, []).append(text)
+    joined = {key: ", ".join(values) for key, values in headers.items()}
+    if names is True:
+        fields[_HEADERS_FIELD] = json.dumps(joined)
+    else:
+        fields.update((_HEADER_FIELD_PREFIX + key, value) for key, value in joined.items())
+    return fields
+
+
 class _UvicornAccessHandler(logging.Handler):
     """Turn uvicorn access log records into structured Loguru records."""
 
-    def __init__(self, health_paths: frozenset[str] = frozenset()) -> None:
+    def __init__(
+        self, health_paths: frozenset[str] = frozenset(), log_request_headers: bool | frozenset[str] = False
+    ) -> None:
         super().__init__()
         self.health_paths = health_paths
+        self.log_request_headers = log_request_headers
         self._warned_unstructured = False
 
     def emit(self, record: logging.LogRecord) -> None:
@@ -89,13 +131,24 @@ class _UvicornAccessHandler(logging.Handler):
             elif status_code < 300 and path in self.health_paths:
                 level = "DEBUG"
             logger.opt(depth=depth, exception=_exception_info(record)).log(level, _ACCESS_LOG_MESSAGE, **fields)
+            if not _trace_enabled():
+                return
+            trace_fields: dict[str, Any] = {"url.path": path}
             if query:
-                logger.opt(depth=depth).trace(_ACCESS_LOG_QUERY_MESSAGE, **{"url.path": path, "url.query": query})
+                trace_fields["url.query"] = query
+            if self.log_request_headers:
+                trace_fields.update(_request_header_fields(sys._getframe(depth), self.log_request_headers))
+                logger.opt(depth=depth).trace(_ACCESS_LOG_HEADERS_MESSAGE, **trace_fields)
+            elif query:
+                logger.opt(depth=depth).trace(_ACCESS_LOG_QUERY_MESSAGE, **trace_fields)
         except Exception:
             self.handleError(record)
 
 
-def uvicorn_log_config(health_paths: Iterable[str] = ()) -> dict[str, Any]:
+def uvicorn_log_config(
+    health_paths: Iterable[str] = (),
+    log_request_headers: bool | Iterable[str] = False,
+) -> dict[str, Any]:
     """
     Return a ``logging.config.dictConfig`` dict for ``uvicorn.run(app, log_config=...)``.
 
@@ -119,10 +172,25 @@ def uvicorn_log_config(health_paths: Iterable[str] = ()) -> dict[str, Any]:
     - ``network.protocol.version``: ``str``, e.g. ``1.1``
     - ``http.response.status_code``: ``int``
 
-    The query string may contain secrets and is never part of that record.
-    It is logged separately at level ``TRACE`` as ``HTTP request query string.``
+    The query string and the request headers may contain secrets and are never part of that record.
+    The query string is logged separately at level ``TRACE`` as ``HTTP request query string.``
     with the fields ``url.path`` and ``url.query``.
-    That ``TRACE`` record reaches the sink only if Lancelog runs at ``TRACE`` (``setup_logging(level="TRACE")``).
+    With ``log_request_headers``, that ``TRACE`` record is written for every request,
+    has the message ``HTTP request headers and query string.`` and the request headers:
+
+    - ``True``: all headers in one field ``http.request.headers``,
+      a JSON object as a string, e.g. ``{"host": "example.org", "accept": "*/*"}``.
+    - an iterable of header names (case-insensitive): one field ``http.request.header.<name>``
+      per listed header the request carries, e.g. ``http.request.header.user-agent``.
+      Each distinct field name costs a mapping entry in log stores such as OpenSearch,
+      which is why ``True`` uses a single field.
+
+    Header names are lowercase, values of a repeated header are joined with ``, ``.
+    uvicorn does not pass the headers to the access log record,
+    so they are read from the request cycle that wrote it.
+    If that fails, e.g. after a uvicorn update, the record carries the field ``_request_headers_error``
+    with the reason, and the headers that could still be read.
+    Those ``TRACE`` records reach the sink only if Lancelog runs at ``TRACE`` (``setup_logging(level="TRACE")``).
 
     Access records are logged at ``INFO``,
     at ``ERROR`` if the status code is 500 or above (every path),
@@ -134,22 +202,43 @@ def uvicorn_log_config(health_paths: Iterable[str] = ()) -> dict[str, Any]:
         whose successful requests (status below 300) are logged at ``DEBUG``.
         They are compared with the path as uvicorn logs it:
         percent-encoded and, on newer uvicorn versions, including ``root_path`` (e.g. ``/api/health``).
+    :param log_request_headers: ``False`` (default): do not log request headers.
+        ``True``: log all of them in one field.
+        An iterable of header names: log those, one field each.
+        All at ``TRACE``, see above.
     :raises RuntimeError: If ``setup_logging()`` has not been called.
-    :raises TypeError: If ``health_paths`` is a ``str`` or ``None``.
+    :raises TypeError: If ``health_paths`` or ``log_request_headers`` is a ``str`` or ``None``.
     """
     if health_paths is None or isinstance(health_paths, str):
         raise TypeError("health_paths must be an iterable of paths, not a str or None")
+    if log_request_headers is None or isinstance(log_request_headers, str):
+        raise TypeError("log_request_headers must be a bool or an iterable of header names, not a str or None")
     if not any(isinstance(handler, _InterceptHandler) for handler in logging.getLogger().handlers):
         raise RuntimeError(
             "The root logger has no Lancelog handler. Call lancelog.setup_logging() before uvicorn_log_config()."
         )
     paths = frozenset(health_paths)
-    logger.debug("Configured uvicorn logging.", health_paths=sorted(paths))
+    headers = (
+        log_request_headers
+        if isinstance(log_request_headers, bool)
+        else frozenset(n.lower() for n in log_request_headers)
+    )
+    logger.debug(
+        "Configured uvicorn logging.",
+        health_paths=sorted(paths),
+        log_request_headers=headers if isinstance(headers, bool) else sorted(headers),
+    )
     return {
         "version": 1,
         "disable_existing_loggers": False,
         "formatters": {"default": {}, "access": {}},
-        "handlers": {"lancelog_access": {"()": _UvicornAccessHandler, "health_paths": paths}},
+        "handlers": {
+            "lancelog_access": {
+                "()": _UvicornAccessHandler,
+                "health_paths": paths,
+                "log_request_headers": headers,
+            }
+        },
         "loggers": {
             "uvicorn": {"handlers": [], "level": "INFO", "propagate": True},
             "uvicorn.access": {"handlers": ["lancelog_access"], "level": "INFO", "propagate": False},
