@@ -188,8 +188,8 @@ def test_tb_in_data_and_multi_line_output(capsys: CaptureFixture) -> None:
         ("request_id", True, "request_id=-"),
         ("process_id", True, f"process_id={os.getpid()}"),
         ("source_ref_key", "SRC", "SRC=test_setup.test_data_section_options:"),
-        ("time", True, f"time={datetime.datetime.now():%Y-%m-%dT%H:%M:}"),
-        ("timestamp", True, f"timestamp={str(datetime.datetime.now().timestamp())[:8]}"),
+        ("time", True, "time="),
+        ("timestamp", True, "timestamp="),
         ("thread_id", True, f"thread_id={threading.current_thread().ident}"),
         ("thread_name", True, "thread_name=MainThread"),
     ],
@@ -212,6 +212,24 @@ def test_data_section_options(capsys: CaptureFixture, opt: str, val: bool | str,
         assert "_source=" not in parsed["data"]
     else:
         assert "_source=test_setup.test_data_section_options:" in parsed["data"]
+
+
+@pytest.mark.parametrize(  # type: ignore
+    "opt,parse",
+    [
+        ("time", datetime.datetime.fromisoformat),
+        ("timestamp", lambda value: datetime.datetime.fromtimestamp(float(value)).astimezone()),
+    ],
+)
+def test_data_section_time_options(capsys: CaptureFixture, opt: str, parse: Callable[[str], datetime.datetime]) -> None:
+    setup_logging(sink=sys.stderr, data_options=DataSectionOptions(**{opt: True}))  # type: ignore[arg-type,unused-ignore]
+    before = datetime.datetime.now().astimezone()
+    logger.info("Hello World")
+    after = datetime.datetime.now().astimezone()
+    m = re.search(rf"\b{opt}=(\S+)", capsys.readouterr().err)
+    if not m:
+        raise AssertionError("Field not found in log record.")  # pragma: nocover
+    assert before <= parse(m.group(1)) <= after
 
 
 @pytest.mark.parametrize(
