@@ -3,7 +3,9 @@ __pycache__/
 .coverage
 *.py[oc]
 build/
+coverage.xml
 dist/
+pytest-junit.xml
 wheels/
 *.egg-info
 
