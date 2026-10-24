@@ -32,6 +32,15 @@ Run all commands from the repository root.
    uv run docs/otel-example/app.py
    ```
 
+   The environment variable `LOG_LEVEL` sets the minimum level of the stdout output (default `INFO`),
+   for example `LOG_LEVEL=DEBUG uv run docs/otel-example/app.py`.
+   The export to VictoriaLogs always starts at `DEBUG`.
+   With `LOG_LEVEL=TRACE`, stdout also shows every request that sends a batch to VictoriaLogs:
+
+   ```text
+   2026-10-24T09:16:52.957+02:00 TRACE    [         -] http://localhost:9428 "POST /insert/opentelemetry/v1/logs HTTP/1.1" 200 0 | _source=connectionpool._make_request:550
+   ```
+
 3. Create log records.
    The `X-Request-ID` header sets the request ID of the log records
    ([asgi-correlation-id](https://github.com/snok/asgi-correlation-id) reads it);
@@ -40,6 +49,7 @@ Run all commands from the repository root.
    ```shell
    curl -H 'X-Request-ID: demo-request-1' localhost:8000/
    curl -H 'X-Request-ID: demo-request-2' localhost:8000/error
+   curl localhost:8000/health
    ```
 
 4. Open <http://localhost:9428/select/vmui/> and run the query `service.name:"lancelog-example"`.
@@ -58,6 +68,9 @@ curl localhost:9428/select/logsql/query -d 'query=service.name:"lancelog-example
 - The record "Calculation failed" has the fields `exception.type`, `exception.message` and `exception.stacktrace`.
 - Uvicorn's access log records "HTTP request." have the fields `http.request.method`, `url.path`
   and `http.response.status_code` (from `uvicorn_log_config()`).
+  The record for `/error` has the severity `ERROR`, because the endpoint returns status 500.
+  The record for `/health` has the severity `DEBUG`, because `/health` is configured as a health path,
+  so it appears on stdout only with `LOG_LEVEL=DEBUG`.
 - Both records have `request_id` set to the value of the `X-Request-ID` header (`demo-request-1`, `demo-request-2`).
   `CorrelationIdMiddleware` stores the header in a context variable,
   and the app passes its getter to `setup_logging(request_id_func=correlation_id.get)`.

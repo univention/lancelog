@@ -628,6 +628,15 @@ They are lost on `SIGKILL`.
 In a plain script, an unhandled `SIGTERM` terminates the process without running `atexit` hooks, so install a signal handler that raises `SystemExit`.
 Uvicorn handles `SIGTERM` and exits normally.
 
+With `setup_logging(level="TRACE")`, the stdout or file output shows every request that sends a batch to the endpoint.
+`urllib3.connectionpool` logs these requests at `DEBUG`, which Lancelog moves to `TRACE`
+(see [Move log level from DEBUG to TRACE](#move-log-level-from-debug-to-trace)).
+They are not exported themselves.
+
+```text
+2026-10-24T09:16:52.957+02:00 TRACE    [         -] http://victorialogs:9428 "POST /insert/opentelemetry/v1/logs HTTP/1.1" 200 0 | _source=connectionpool._make_request:550
+```
+
 #### Debian and UCS
 
 The `otel` extra applies to installations with `pip` or `uv`.

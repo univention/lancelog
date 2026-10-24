@@ -13,9 +13,12 @@
 # ///
 """Example FastAPI app that logs to stdout and to VictoriaLogs over OTLP."""
 
+import os
+
 import uvicorn
 from asgi_correlation_id import CorrelationIdMiddleware, correlation_id
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from opentelemetry import trace
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
@@ -27,6 +30,7 @@ from lancelog import DataSectionOptions, OtelOptions, logger, setup_logging, uvi
 trace.set_tracer_provider(TracerProvider())
 
 setup_logging(
+    level=os.environ.get("LOG_LEVEL", "INFO"),
     data_options=DataSectionOptions(trace_context=True),
     request_id_func=correlation_id.get,
     otel=OtelOptions(
@@ -47,17 +51,22 @@ def index() -> dict[str, str]:
     return {"status": "ok"}
 
 
-def error() -> dict[str, str]:
+def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+def error() -> JSONResponse:
     try:
         int("not a number")
     except ValueError:
         logger.exception("Calculation failed")
-    return {"status": "error logged"}
+    return JSONResponse({"status": "error logged"}, status_code=500)
 
 
 app.add_api_route("/", index)
+app.add_api_route("/health", health)
 app.add_api_route("/error", error)
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000, log_config=uvicorn_log_config())
+    uvicorn.run(app, host="127.0.0.1", port=8000, log_config=uvicorn_log_config(health_paths=("/health",)))

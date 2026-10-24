@@ -4,6 +4,8 @@
 
 - fix: always export `request_id` to OpenTelemetry,
   independent of `data_format` and `DataSectionOptions`
+- docs: extend the OpenTelemetry demo
+- docs: document the `TRACE` records of OTLP exports
 
 ## [0.5.0] - 2026-10-23
 

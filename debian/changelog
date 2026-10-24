@@ -2,6 +2,8 @@ lancelog (0.5.1) unstable; urgency=low
 
   * fix: always export `request_id` to OpenTelemetry,
     independent of `data_format` and `DataSectionOptions`
+  * docs: extend the OpenTelemetry demo
+  * docs: document the `TRACE` records of OTLP exports
 
  -- Daniel Troeder <troeder@univention.de>  Sat, 24 Oct 2026 08:54:36 +0200
 
