@@ -368,16 +368,18 @@ def test_shutdown_after_application_removed_handlers(exported: Exported) -> None
 
 
 def test_invalid_otel_level_starts_no_exporter(exported: Exported) -> None:
+    otel_options = OtelOptions(level="BOGUS")
     with pytest.raises(ValueError, match="BOGUS"):
-        _setup(otel=OtelOptions(level="BOGUS"))
+        _setup(otel=otel_options)
     assert not exported.exporters
     assert not _otel_threads()
 
 
 def test_invalid_otel_level_keeps_previous_configuration(exported: Exported) -> None:
     _setup()
+    otel_options = OtelOptions(level="BOGUS")
     with pytest.raises(ValueError, match="BOGUS"):
-        _setup(otel=OtelOptions(level="BOGUS"))
+        _setup(otel=otel_options)
     logging.getLogger("app").warning("still exported")
     assert len(exported.exporters) == 1
     assert "still exported" in [r.body for r in exported.records()]
