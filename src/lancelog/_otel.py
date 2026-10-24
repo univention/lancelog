@@ -128,7 +128,8 @@ def add_otlp_sink(options: OtelOptions, source_ref_key: str) -> Callable[[], Non
         extra = record["extra"]
         context = _context(extra)
         skip = excluded_with_trace if context else excluded
-        attributes = {k: _attribute_value(v) for k, v in extra.items() if k not in skip and v is not None}
+        fields = {"request_id": record.get("raw_request_id"), **extra}
+        attributes = {k: _attribute_value(v) for k, v in fields.items() if k not in skip and v is not None}
         attributes["code.file.path"] = record["file"].path
         attributes["code.function.name"] = (
             f"{record['name']}.{record['function']}" if record["name"] else record["function"]

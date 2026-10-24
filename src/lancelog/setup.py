@@ -219,7 +219,7 @@ def setup_logging(
             request_id_func=request_id_func,
             trace_context_func=trace_context_func,
             syslog_prio_prefix=syslog_prio_prefix and not sink_is_tty,
-            keep_raw_message=otel is not None,
+            otel_export=otel is not None,
         )
     )
     if otel is not None:
@@ -294,7 +294,7 @@ def _patching(
     request_id_func: Callable[[], str] | None,
     syslog_prio_prefix: bool,
     trace_context_func: Callable[[], dict[str, str]] | None,
-    keep_raw_message: bool,
+    otel_export: bool,
 ) -> None:
     """
     Serialize log record to Logfmt or JSON, add optional data.
@@ -303,7 +303,7 @@ def _patching(
     if record["level"].name.startswith("Level "):
         # Unknown log level, check if Python logging knows it. It'll fall back to "Level <int>".
         record["level"].name = logging.getLevelName(record["level"].no).replace(" ", "")
-    if keep_raw_message:  # unescaped, for the OTLP body
+    if otel_export:  # unescaped, for the OTLP body
         record["raw_message"] = record["message"]
     if "\n" in record["message"]:
         record["message"] = repr(record["message"])
@@ -312,6 +312,8 @@ def _patching(
     if record["exception"] and all(record["exception"]):
         record["extra"]["_traceback"] = "".join(_exc_formatter.format_exception(*record["exception"]))
     request_id = _resolve_request_id(request_id_func)
+    if otel_export:  # untruncated, exported independent of data_format and data_options
+        record["raw_request_id"] = request_id
     _add_data_section_options(record, data_options, request_id)
     if trace_context_func is not None:
         record["extra"].update(trace_context_func())

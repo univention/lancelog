@@ -64,8 +64,9 @@ curl localhost:9428/select/logsql/query -d 'query=service.name:"lancelog-example
   Records logged outside a request, such as "Configured logging.", have `request_id` `-`.
 - Every record has `code.file.path`, `code.function.name` and `code.line.number`,
   the severity in `severity`, and the resource attribute `service.name`.
-- The stdout of the application shows the same records as JSON,
-  with `request_id`, `trace_id`, `span_id` and `trace_flags` in `extra`.
+- The stdout of the application shows the same records in Logfmt,
+  with the first 10 characters of the request ID in brackets
+  and `trace_id`, `span_id` and `trace_flags` in the data section.
 
 Stop the application with Ctrl+C.
 Lancelog flushes pending records at exit.

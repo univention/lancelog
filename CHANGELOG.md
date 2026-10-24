@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.5.1] - 2026-10-24
+
+- fix: always export `request_id` to OpenTelemetry,
+  independent of `data_format` and `DataSectionOptions`
+
 ## [0.5.0] - 2026-10-23
 
 - feat: add OpenTelemetry trace and span IDs to log records

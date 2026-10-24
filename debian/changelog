@@ -1,3 +1,10 @@
+lancelog (0.5.1) unstable; urgency=low
+
+  * fix: always export `request_id` to OpenTelemetry,
+    independent of `data_format` and `DataSectionOptions`
+
+ -- Daniel Troeder <troeder@univention.de>  Sat, 24 Oct 2026 08:54:36 +0200
+
 lancelog (0.5.0) unstable; urgency=low
 
   * feat: add OpenTelemetry trace and span IDs to log records

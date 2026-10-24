@@ -536,15 +536,16 @@ Pass `OtelOptions` to `setup_logging()` to export log records to an OpenTelemetr
 The export is an additional sink next to the one configured by `sink` and `level`.
 It has its own minimum level.
 `setup_logging(filter=...)` applies only to the stdout or file sink.
+So do `data_format` and `fmt`:
+the OTLP sink builds its records from the log record, not from the formatted line.
 The OTLP sink filters by its own `level` and excludes the `opentelemetry*` loggers.
-Both features are independent:
+Both OpenTelemetry features are independent:
 export works without `trace_context`, and `trace_context` works without export.
 
 ```python
-from lancelog import DataFormat, OtelOptions, setup_logging
+from lancelog import OtelOptions, setup_logging
 
 setup_logging(
-    data_format=DataFormat.JSON,
     level="INFO",  # stdout
     otel=OtelOptions(
         level="DEBUG",  # OTLP
@@ -596,7 +597,8 @@ OpenTelemetry attributes accept only primitives and homogeneous sequences of pri
 Lancelog keeps `str`, `bool`, `int` and `float` values and lists or tuples whose items are all of the same primitive type.
 It converts every other value with `str()`.
 Fields with the value `None` are dropped.
-`request_id` is exported as an attribute: always with `DataFormat.JSON`, otherwise only with `DataSectionOptions(request_id=True)`.
+`request_id` is always exported as an attribute, untruncated, with the value from `request_id_func` (`-` without it).
+A `request_id` field bound with `logger.bind()` or `logger.contextualize()` takes precedence.
 The internal fields `serialized` and `_traceback` and the source reference field (`_source` by default) are not exported as attributes.
 The fields `trace_id`, `span_id` and `trace_flags` become the trace context of the record when they hold valid hexadecimal IDs,
 and are exported as attributes otherwise.

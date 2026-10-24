@@ -20,14 +20,13 @@ from opentelemetry import trace
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
 
-from lancelog import DataFormat, DataSectionOptions, OtelOptions, logger, setup_logging, uvicorn_log_config
+from lancelog import DataSectionOptions, OtelOptions, logger, setup_logging, uvicorn_log_config
 
 
 # Spans only need valid IDs, so no span exporter is configured.
 trace.set_tracer_provider(TracerProvider())
 
 setup_logging(
-    data_format=DataFormat.JSON,
     data_options=DataSectionOptions(trace_context=True),
     request_id_func=correlation_id.get,
     otel=OtelOptions(

@@ -210,6 +210,34 @@ def test_export_attributes(exported: Exported) -> None:
     assert attrs["code.line.number"] == line
 
 
+@pytest.mark.parametrize("data_format", [DataFormat.LOGFMT, DataFormat.JSON])  # type: ignore
+def test_export_request_id_without_data_section_option(
+    exported: Exported, capsys: CaptureFixture, data_format: DataFormat
+) -> None:
+    _setup(data_format=data_format, request_id_func=lambda: "abcdefghijklmnop")
+    logger.info("rid")
+    (record,) = [r for r in exported.records() if r.body == "rid"]
+    assert record.attributes["request_id"] == "abcdefghijklmnop"
+    if data_format == DataFormat.LOGFMT:
+        out = capsys.readouterr().out
+        assert "[abcdefghij] rid" in out
+        assert "request_id=" not in out
+
+
+def test_export_request_id_without_request_id_func(exported: Exported) -> None:
+    _setup()
+    logger.info("rid")
+    (record,) = [r for r in exported.records() if r.body == "rid"]
+    assert record.attributes["request_id"] == "-"
+
+
+def test_export_bound_request_id_overrides(exported: Exported) -> None:
+    _setup(request_id_func=lambda: "from-func")
+    logger.bind(request_id="bound").info("rid")
+    (record,) = [r for r in exported.records() if r.body == "rid"]
+    assert record.attributes["request_id"] == "bound"
+
+
 def test_export_exception_attributes(exported: Exported) -> None:
     _setup()
     try:
