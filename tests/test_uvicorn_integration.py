@@ -136,7 +136,8 @@ def test_uvicorn_access_record_has_request_duration() -> None:
         return float(match["extra"]["http.server.request.duration"])
 
     assert 0 <= duration("/items") < duration("/slow")
-    assert 0.2 <= duration("/slow") < 5
+    # uvloop's millisecond timers can end the 0.2 s sleep up to about 2 ms early.
+    assert 0.19 <= duration("/slow") < 5
     assert 0 <= duration("/boom") < 5
 
 
