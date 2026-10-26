@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
+import asyncio
 import io
 import json
 import logging
@@ -15,7 +16,7 @@ from unittest.mock import patch
 import pytest
 from _pytest.capture import CaptureFixture
 
-from lancelog import DataFormat, LogLevel, logger, setup_logging, uvicorn_log_config
+from lancelog import DataFormat, LogLevel, RequestTimingMiddleware, logger, setup_logging, uvicorn_log_config
 from lancelog.setup import ADR0010_REGEX, _InterceptHandler
 from lancelog.uvicorn_log import _request_header_fields, _trace_enabled
 
@@ -646,3 +647,35 @@ def test_exc_info_true_outside_except_stays_one_line(
     err = capsys.readouterr().err
     assert "NoneType" not in err
     assert [_parse(line)["level"] for line in err.splitlines()] == levels
+
+
+def _timed_request(scope_type: str = "http") -> list[str]:
+    seen: list[str] = []
+
+    async def inner(scope: Any, receive: Any, send: Any) -> None:
+        seen.append(scope["type"])
+        _access()
+
+    asyncio.run(RequestTimingMiddleware(inner)({"type": scope_type}, None, None))  # type: ignore[arg-type]
+    return seen
+
+
+def test_access_record_duration_with_middleware(capsys: CaptureFixture) -> None:
+    _setup(data_format=DataFormat.JSON)
+    assert _timed_request() == ["http"]
+    duration = json.loads(capsys.readouterr().err)["record"]["extra"]["http.server.request.duration"]
+    assert isinstance(duration, float)
+    assert duration >= 0
+
+
+def test_access_record_without_middleware_has_no_duration(capsys: CaptureFixture) -> None:
+    _setup(data_format=DataFormat.JSON)
+    _access()
+    assert "http.server.request.duration" not in json.loads(capsys.readouterr().err)["record"]["extra"]
+
+
+@pytest.mark.parametrize("scope_type", ["lifespan", "websocket"])  # type: ignore
+def test_middleware_passes_non_http_scopes_through(scope_type: str, capsys: CaptureFixture) -> None:
+    _setup(data_format=DataFormat.JSON)
+    assert _timed_request(scope_type) == [scope_type]
+    assert "http.server.request.duration" not in json.loads(capsys.readouterr().err)["record"]["extra"]

@@ -1,3 +1,10 @@
+lancelog (0.6.0) unstable; urgency=low
+
+  * feat: add `RequestTimingMiddleware`,
+    which adds `http.server.request.duration` to the uvicorn access record
+
+ -- Daniel Troeder <troeder@univention.de>  Mon, 26 Oct 2026 08:10:32 +0100
+
 lancelog (0.5.1) unstable; urgency=low
 
   * fix: always export `request_id` to OpenTelemetry,

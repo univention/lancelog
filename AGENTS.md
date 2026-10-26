@@ -61,6 +61,7 @@ Contains the core: logging setup, the Loguru patcher, the standard `logging` int
 ### `src/lancelog/uvicorn_log.py`
 
 - **`uvicorn_log_config(health_paths=(), log_request_headers=False)`**: returns a `dictConfig` dict for `uvicorn.run(log_config=...)`. Requires `setup_logging()` to have run (raises `RuntimeError` otherwise) and logs its configuration at `DEBUG`. Makes the `uvicorn` loggers propagate to Lancelog and turns access records into structured records via `_UvicornAccessHandler`: status 500 or above is logged at `ERROR` on every path, paths in `health_paths` with status below 300 at `DEBUG`, everything else at `INFO`. The query string is logged in a separate `TRACE` record; `log_request_headers` (`False`, `True` for all headers as one JSON field, or an iterable of header names for one field each) adds the request headers to it. Lancelog does not depend on uvicorn.
+- **`RequestTimingMiddleware`**: pure ASGI middleware (outermost) that stores the start time of HTTP requests in a `ContextVar`; `_UvicornAccessHandler` then adds the field `http.server.request.duration` (seconds, until the response start) to the access record.
 
 ### `src/lancelog/_otel.py`
 
@@ -77,7 +78,7 @@ See `docs/otel-example/` for a runnable demo.
 
 ### `src/lancelog/__init__.py`
 
-Public API surface: exports `setup_logging`, `logger`, `LogLevel`, `DataFormat`, `DataSectionOptions`, `OtelOptions`, `LOG_FORMAT_DEFAULT`, `LOG_FORMAT_PRE_v030`, `LOG_LEVEL_DEBUG_TO_TRACE`, `uvicorn_log_config`.
+Public API surface: exports `setup_logging`, `logger`, `LogLevel`, `DataFormat`, `DataSectionOptions`, `OtelOptions`, `RequestTimingMiddleware`, `LOG_FORMAT_DEFAULT`, `LOG_FORMAT_PRE_v030`, `LOG_LEVEL_DEBUG_TO_TRACE`, `uvicorn_log_config`.
 
 ### Log Format
 

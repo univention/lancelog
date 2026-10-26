@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.6.0] - 2026-10-26
+
+- feat: add `RequestTimingMiddleware`,
+  which adds `http.server.request.duration` to the uvicorn access record
+
 ## [0.5.1] - 2026-10-24
 
 - fix: always export `request_id` to OpenTelemetry,

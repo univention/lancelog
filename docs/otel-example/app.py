@@ -23,7 +23,7 @@ from opentelemetry import trace
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
 
-from lancelog import DataSectionOptions, OtelOptions, logger, setup_logging, uvicorn_log_config
+from lancelog import DataSectionOptions, OtelOptions, RequestTimingMiddleware, logger, setup_logging, uvicorn_log_config
 
 
 # Spans only need valid IDs, so no span exporter is configured.
@@ -44,6 +44,7 @@ app = FastAPI()
 # Without validator=None, IDs that are not UUID4 strings would be replaced by generated ones.
 app.add_middleware(CorrelationIdMiddleware, validator=None)
 FastAPIInstrumentor.instrument_app(app)
+app.add_middleware(RequestTimingMiddleware)
 
 
 def index() -> dict[str, str]:

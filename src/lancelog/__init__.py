@@ -17,7 +17,7 @@ from .setup import (
     OtelOptions,
     setup_logging,
 )
-from .uvicorn_log import uvicorn_log_config
+from .uvicorn_log import RequestTimingMiddleware, uvicorn_log_config
 
 
 __all__ = [
@@ -29,6 +29,7 @@ __all__ = [
     "DataSectionOptions",
     "LogLevel",
     "OtelOptions",
+    "RequestTimingMiddleware",
     "logger",
     "setup_logging",
     "uvicorn_log_config",

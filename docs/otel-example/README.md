@@ -66,8 +66,9 @@ curl localhost:9428/select/logsql/query -d 'query=service.name:"lancelog-example
 - The record "Handled request" has the attributes `user` and `items` (from `logger.bind()`),
   and `trace_id` and `span_id` of the span that `opentelemetry-instrumentation-fastapi` created for the request.
 - The record "Calculation failed" has the fields `exception.type`, `exception.message` and `exception.stacktrace`.
-- Uvicorn's access log records "HTTP request." have the fields `http.request.method`, `url.path`
-  and `http.response.status_code` (from `uvicorn_log_config()`).
+- Uvicorn's access log records "HTTP request." have the fields `http.request.method`, `url.path`,
+  `http.response.status_code` and `http.server.request.duration`
+  (from `uvicorn_log_config()` and `RequestTimingMiddleware`).
   The record for `/error` has the severity `ERROR`, because the endpoint returns status 500.
   The record for `/health` has the severity `DEBUG`, because `/health` is configured as a health path,
   so it appears on stdout only with `LOG_LEVEL=DEBUG`.

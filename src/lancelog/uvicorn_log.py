@@ -8,7 +8,9 @@ import json
 import logging
 import re
 import sys
-from collections.abc import Iterable, Mapping
+import time
+from collections.abc import Awaitable, Callable, Iterable, Mapping, MutableMapping
+from contextvars import ContextVar
 from types import FrameType
 from typing import Any, Literal, TypeGuard
 
@@ -27,6 +29,40 @@ _HEADER_FIELD_PREFIX = "http.request.header."
 _HEADERS_ERROR_FIELD = "_request_headers_error"
 _NO_SCOPE = "request scope not found"
 _TRACE_NO = logger.level("TRACE").no
+_DURATION_FIELD = "http.server.request.duration"
+
+# ASGI types, so Lancelog needs neither Starlette nor uvicorn.
+_Scope = MutableMapping[str, Any]
+_Message = MutableMapping[str, Any]
+_Receive = Callable[[], Awaitable[_Message]]
+_Send = Callable[[_Message], Awaitable[None]]
+_ASGIApp = Callable[[_Scope, _Receive, _Send], Awaitable[None]]
+
+_request_start: ContextVar[float] = ContextVar("lancelog_request_start")
+
+
+class RequestTimingMiddleware:
+    """
+    Pure ASGI middleware that records when a request arrives,
+    so the uvicorn access record can carry ``http.server.request.duration``.
+
+    It must be the outermost middleware, so it also times the other middlewares.
+    In FastAPI and Starlette, add it last: ``app.add_middleware(RequestTimingMiddleware)``.
+    In ``FastAPI(middleware=[...])`` or ``Starlette(middleware=[...])``, the list is outermost-first,
+    so put it first.
+    A ``BaseHTTPMiddleware`` or ``@app.middleware("http")`` outside of it hides the field,
+    because that middleware sends the response from another task.
+    Only HTTP requests are timed, other scope types (``websocket``, ``lifespan``) pass through.
+    """
+
+    def __init__(self, app: _ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: _Scope, receive: _Receive, send: _Send) -> None:
+        if scope["type"] == "http":
+            # No need to reset the ContextVar in a finally block. Every request runs in its own context.
+            _request_start.set(time.perf_counter())
+        await self.app(scope, receive, send)
 
 
 def _is_access_args(args: Any) -> TypeGuard[tuple[str, str, str, str, int]]:
@@ -104,6 +140,7 @@ class _UvicornAccessHandler(logging.Handler):
             if not _is_access_args(record.args):
                 self._emit_unstructured(record, depth + 1)
                 return
+            now = time.perf_counter()
             client_addr, method, path_with_query, http_version, status_code = record.args
             path, _, query = path_with_query.partition("?")
             fields: dict[str, Any] = _client_fields(client_addr)
@@ -111,6 +148,9 @@ class _UvicornAccessHandler(logging.Handler):
             fields["url.path"] = path
             fields["network.protocol.version"] = http_version
             fields["http.response.status_code"] = status_code
+            start = _request_start.get(None)
+            if start is not None:
+                fields[_DURATION_FIELD] = round(now - start, 4)
             level = self._access_level(record, path, status_code)
             logger.opt(depth=depth, exception=_exception_info(record)).log(level, _ACCESS_LOG_MESSAGE, **fields)
             if _trace_enabled():
@@ -179,6 +219,11 @@ def uvicorn_log_config(
     - ``url.path``: ``str``, without the query string
     - ``network.protocol.version``: ``str``, e.g. ``1.1``
     - ``http.response.status_code``: ``int``
+    - ``http.server.request.duration``: ``float``, seconds,
+      from when ``RequestTimingMiddleware`` received the request
+      until the response status and headers are sent
+      (the body transfer of streaming responses is not included).
+      Only present when ``RequestTimingMiddleware`` is used.
 
     The query string and the request headers may contain secrets and are never part of that record.
     The query string is logged separately at level ``TRACE`` as ``HTTP request query string.``

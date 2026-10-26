@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
+import asyncio
 import io
 import json
 import logging
@@ -17,7 +18,7 @@ import pytest
 import uvicorn
 from _pytest.capture import CaptureFixture
 
-from lancelog import DataFormat, setup_logging, uvicorn_log_config
+from lancelog import DataFormat, RequestTimingMiddleware, setup_logging, uvicorn_log_config
 from lancelog.setup import _InterceptHandler
 from lancelog.uvicorn_log import _UvicornAccessHandler
 
@@ -34,6 +35,8 @@ async def app(scope: Scope, receive: Receive, send: Send) -> None:
     request_id.set("req-" + path.strip("/"))
     if path == "/boom":
         raise RuntimeError("boom")
+    if path == "/slow":
+        await asyncio.sleep(0.2)
     await send({"type": "http.response.start", "status": 200, "headers": [(b"content-type", b"text/plain")]})
     await send({"type": "http.response.body", "body": b"ok"})
 
@@ -48,8 +51,10 @@ def _get(port: int, path: str, headers: dict[str, str] | None = None) -> int:
 
 
 @contextmanager
-def _server(log_config: dict[str, Any]) -> Iterator[int]:
-    config = uvicorn.Config(app, log_config=log_config, lifespan="off", host="127.0.0.1", port=0)
+def _server(log_config: dict[str, Any], timed: bool = False) -> Iterator[int]:
+    config = uvicorn.Config(
+        RequestTimingMiddleware(app) if timed else app, log_config=log_config, lifespan="off", host="127.0.0.1", port=0
+    )
     server = uvicorn.Server(config)
     # Server.run(sockets=...) skips the "Uvicorn running on" message; bind_socket() logs it.
     sock = config.bind_socket()
@@ -108,11 +113,31 @@ def test_uvicorn_records_go_through_lancelog(capfd: CaptureFixture) -> None:
     assert "url.query" not in items["extra"]
     assert "secret" not in output
 
+    assert all("http.server.request.duration" not in r["extra"] for r in records)
     assert access("/boom")["extra"]["http.response.status_code"] == 500
     assert access("/boom")["level"]["name"] == "ERROR"
     (error,) = [r for r in records if r["message"] == "Exception in ASGI application"]
     assert error["level"]["name"] == "ERROR"
     assert "RuntimeError: boom" in error["extra"]["_traceback"]
+
+
+def test_uvicorn_access_record_has_request_duration() -> None:
+    buf = io.StringIO()
+    setup_logging(sink=buf, level="INFO", data_format=DataFormat.JSON)
+    with _server(uvicorn_log_config(), timed=True) as port:
+        assert _get(port, "/items") == 200
+        assert _get(port, "/slow") == 200
+        assert _get(port, "/boom") == 500
+
+    records = _records(buf)
+
+    def duration(path: str) -> float:
+        (match,) = [r for r in records if r["message"] == "HTTP request." and r["extra"]["url.path"] == path]
+        return float(match["extra"]["http.server.request.duration"])
+
+    assert 0 <= duration("/items") < duration("/slow")
+    assert 0.2 <= duration("/slow") < 5
+    assert 0 <= duration("/boom") < 5
 
 
 def test_uvicorn_request_headers_logged_at_trace() -> None:

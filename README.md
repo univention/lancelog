@@ -398,11 +398,12 @@ The `uvicorn.access` logger gets a handler that writes structured records.
 import uvicorn
 from fastapi import FastAPI
 
-from lancelog import setup_logging, uvicorn_log_config
+from lancelog import RequestTimingMiddleware, setup_logging, uvicorn_log_config
 
 setup_logging()
 
 app = FastAPI()
+app.add_middleware(RequestTimingMiddleware)
 
 
 @app.get("/health")
@@ -427,7 +428,7 @@ if __name__ == "__main__":
 A request to `/users` is logged like this:
 
 ```text
-2026-10-22T12:28:57.987+02:00 INFO     [         -] HTTP request. | client.address=127.0.0.1 client.port=45994 http.request.method=GET url.path=/users network.protocol.version=1.1 http.response.status_code=200 _source=h11_impl.send:477
+2026-10-22T12:28:57.987+02:00 INFO     [         -] HTTP request. | client.address=127.0.0.1 client.port=45994 http.request.method=GET url.path=/users network.protocol.version=1.1 http.response.status_code=200 http.server.request.duration=0.0004 _source=h11_impl.send:477
 ```
 
 Access log records (`uvicorn.access` logger) become structured records
@@ -439,6 +440,41 @@ with the message `HTTP request.` and these fields:
 - `url.path`: `str`, without the query string
 - `network.protocol.version`: `str`, e.g. `1.1`
 - `http.response.status_code`: `int`
+- `http.server.request.duration`: `float`, seconds,
+  only present when `RequestTimingMiddleware` is used
+
+#### Request duration
+
+`RequestTimingMiddleware` stores the time a request arrives.
+It ends when uvicorn sends the response status and headers,
+which is also when uvicorn writes the access record.
+The access record then contains `http.server.request.duration` in seconds, rounded to 0.1 ms.
+The transfer of the response body, for example of a streaming response, is _not_ included.
+
+Add the middleware _last_,
+so that it is the outermost one and times the other middlewares too.
+Without it, the field is omitted.
+
+A `BaseHTTPMiddleware` or `@app.middleware("http")` registered after it
+hides the field, because that middleware sends the response from another task.
+`FastAPI(middleware=[...])` and `Starlette(middleware=[...])` take the list outermost-first,
+the opposite of `add_middleware`, so put `RequestTimingMiddleware` first there.
+
+```python
+app.add_middleware(MiddlewareA)
+app.add_middleware(MiddlewareB)
+app.add_middleware(RequestTimingMiddleware)
+
+# or
+
+app = FastAPI(middleware=[Middleware(RequestTimingMiddleware), Middleware(MiddleWareB), Middleware(MiddleWareA)])
+```
+
+Uvicorn writes no access record for WebSocket connections,
+or for requests whose client disconnects before a response starts,
+so no duration is logged for them.
+
+The field replaces middlewares like [timing-asgi](https://github.com/steinnes/timing-asgi).
 
 #### Log levels
 
