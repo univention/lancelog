@@ -758,6 +758,11 @@ This project uses [uv](https://docs.astral.sh/uv/) as Python package and project
 
 See their respective web pages for installation and usage instructions.
 
+The CI jobs that build the Debian package and publish the Python package run only for tags.
+To release a new version,
+raise the version in `pyproject.toml` and `debian/changelog`,
+then push a tag with that version.
+
 ### Tests
 
 ```shell
