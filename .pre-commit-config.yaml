@@ -39,6 +39,19 @@ repos:
     - id: mypy
       args: ["--python-version", "3.11", "--ignore-missing-imports", "--strict", "--pretty"]
       additional_dependencies: ["mypy-extensions>=1.0"]
+  - repo: https://github.com/facebook/pyrefly-pre-commit
+    rev: 1.4.0
+    hooks:
+    - id: pyrefly-check
+      # Pyrefly reports unresolved imports, so its environment needs the project's dependencies.
+      additional_dependencies:
+        - logfmter
+        - loguru
+        - opentelemetry-api
+        - opentelemetry-sdk
+        - opentelemetry-exporter-otlp-proto-http
+        - pytest
+        - uvicorn
   - repo: https://github.com/jackdewinter/pymarkdown
     rev: v0.9.29
     hooks:

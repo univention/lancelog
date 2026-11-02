@@ -27,8 +27,9 @@ uv run pytest tests/test_setup.py::test_function_name -k "keyword"
 uv run ruff check --fix src/ tests/
 uv run ruff format src/ tests/
 
-# Type checking
+# Type checking: run both, each finds errors the other misses
 uv run mypy src/ tests/
+prek run pyrefly-check --all-files
 
 # Run pre-commit hooks manually
 prek run --all-files
@@ -108,6 +109,8 @@ The `_patching` function serializes the `extra` dict (populated via `logger.bind
 ## Code Style
 
 - **Line length**: 120 characters (Ruff).
-- **Type checking**: MyPy in `strict` mode — all new code must be fully typed.
+- **Type checking**: MyPy in `strict` mode and Pyrefly (`[tool.pyrefly]` in `pyproject.toml`).
+  All new code must be fully typed and pass both.
+  Suppress a Pyrefly error only with a targeted `# pyrefly: ignore[<error-code>]`.
 - **Commit messages**: conventional commits (`fix:`, `feat:`, `ci:`, `test:`, `chore:`).
 - **Python version**: 3.11 minimum (`.python-version` file pins dev to 3.11).

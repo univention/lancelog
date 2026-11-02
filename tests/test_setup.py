@@ -156,7 +156,7 @@ def test_json_format(capsys: CaptureFixture) -> None:
 def test_tb_in_data_and_multi_line_output(capsys: CaptureFixture) -> None:
     def foo() -> None:
         try:
-            1 / 0  # noqa: B018
+            1 / 0  # noqa: B018  # pyrefly: ignore[division-by-zero]
         except Exception:
             logger.exception("Hello", target="World")
 

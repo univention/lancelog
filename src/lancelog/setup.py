@@ -194,7 +194,7 @@ def setup_logging(
         record_fmt = LOG_FORMAT_JSON
     else:
         record_fmt = LOG_FORMAT_DEFAULT
-    kwargs = {
+    kwargs: dict[str, Any] = {
         "sink": sink,
         "format": record_fmt,
         "level": level.value if isinstance(level, LogLevel) else level,
@@ -304,7 +304,7 @@ def _patching(
         # Unknown log level, check if Python logging knows it. It'll fall back to "Level <int>".
         record["level"].name = logging.getLevelName(record["level"].no).replace(" ", "")
     if otel_export:  # unescaped, for the OTLP body
-        record["raw_message"] = record["message"]
+        record["raw_message"] = record["message"]  # pyrefly: ignore[bad-typed-dict-key]
     if "\n" in record["message"]:
         record["message"] = repr(record["message"])
     if "\t| " in record["message"]:
@@ -313,7 +313,7 @@ def _patching(
         record["extra"]["_traceback"] = "".join(_exc_formatter.format_exception(*record["exception"]))
     request_id = _resolve_request_id(request_id_func)
     if otel_export:  # untruncated, exported independent of data_format and data_options
-        record["raw_request_id"] = request_id
+        record["raw_request_id"] = request_id  # pyrefly: ignore[bad-typed-dict-key]
     _add_data_section_options(record, data_options, request_id)
     if trace_context_func is not None:
         record["extra"].update(trace_context_func())
@@ -322,9 +322,10 @@ def _patching(
         record["extra"]["request_id"] = request_id
     elif data_format == DataFormat.LOGFMT:
         if fmt != LOG_FORMAT_PRE_v030:
-            record["request_id"] = request_id[:REQUEST_ID_LENGTH]
+            record["request_id"] = request_id[:REQUEST_ID_LENGTH]  # pyrefly: ignore[bad-typed-dict-key]
             record["extra"][data_options.source_ref_key] = f"{record['module']}.{record['function']}:{record['line']}"
         record["extra"]["serialized"] = logfmter.Logfmter.format_params(record["extra"])
+    # pyrefly: ignore[bad-typed-dict-key]
     record["_syslog_prio"] = f"<{_log_level_to_syslog_priority(record['level'].no)}>" if syslog_prio_prefix else ""
 
 

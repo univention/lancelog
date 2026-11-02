@@ -110,7 +110,7 @@ def add_otlp_sink(options: OtelOptions, source_ref_key: str) -> Callable[[], Non
     resource_attributes: dict[str, Any] = dict(options.resource_attributes or {})
     if options.service_name is not None:
         resource_attributes["service.name"] = options.service_name
-    exporter_kwargs = {
+    exporter_kwargs: dict[str, Any] = {
         key: value
         for key, value in (("endpoint", options.endpoint), ("headers", options.headers), ("timeout", options.timeout))
         if value is not None

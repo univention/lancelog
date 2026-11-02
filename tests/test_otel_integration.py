@@ -75,7 +75,7 @@ print("done")
 
 
 class _Handler(BaseHTTPRequestHandler):
-    server: "_Receiver"
+    server: "_Receiver"  # pyrefly: ignore[bad-override-mutable-attribute]
 
     def do_POST(self) -> None:
         body = self.rfile.read(int(self.headers["Content-Length"]))

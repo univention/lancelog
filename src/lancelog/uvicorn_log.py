@@ -86,7 +86,7 @@ def _redacted_repr(value: Any) -> str:
 
 def _trace_enabled() -> bool:
     """Mirror the early return of Loguru's ``Logger._log()``; ``_core.min_level`` is private API."""
-    return bool(logger._core.min_level <= _TRACE_NO)
+    return bool(logger._core.min_level <= _TRACE_NO)  # pyrefly: ignore[missing-attribute]
 
 
 def _request_header_fields(frame: FrameType, names: Literal[True] | frozenset[str]) -> dict[str, str]:
